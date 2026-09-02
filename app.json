@@ -1,0 +1,1 @@
+{"expo":{"name":"E-Presensi","slug":"epresensi","scheme":"epresensi","orientation":"portrait","plugins":["expo-router",["expo-camera",{"cameraPermission":"Izin kamera diperlukan untuk mengambil foto presensi."}],["expo-location",{"locationWhenInUsePermission":"Izin lokasi diperlukan untuk presensi luring."}]],"experiments":{"typedRoutes":true}}}

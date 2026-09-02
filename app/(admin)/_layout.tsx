@@ -1,0 +1,1 @@
+import { Stack } from 'expo-router';export default function AdminLayout(){return <Stack><Stack.Screen name="index" options={{title:'Admin Dashboard'}}/><Stack.Screen name="attendance" options={{title:'Semua Presensi'}}/><Stack.Screen name="areas" options={{title:'Kelola Area'}}/><Stack.Screen name="users" options={{title:'Pengguna'}}/></Stack>}

@@ -1,0 +1,3 @@
+import { supabase } from './supabase';
+export async function uploadAttendancePhoto(userId:string,attendanceId:string,stage:'check-in'|'check-out',uri:string){const response=await fetch(uri);const blob=await response.blob();const path=`${userId}/${attendanceId}/${stage}.jpg`;const {error}=await supabase.storage.from('attendance-photos').upload(path,blob,{contentType:'image/jpeg',upsert:true});if(error)throw new Error('Foto gagal diupload. Silakan coba lagi.');return path;}
+export async function photoUrl(path:string|null){if(!path)return null;const {data,error}=await supabase.storage.from('attendance-photos').createSignedUrl(path,3600);if(error)throw error;return data.signedUrl;}

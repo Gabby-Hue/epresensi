@@ -1,0 +1,1 @@
+import { Stack } from 'expo-router'; export default function UserLayout(){return <Stack><Stack.Screen name="index" options={{title:'E-Presensi'}}/><Stack.Screen name="attendance" options={{title:'Presensi'}}/><Stack.Screen name="history" options={{title:'Riwayat Presensi'}}/></Stack>}
