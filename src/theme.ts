@@ -1,23 +1,22 @@
-// Design tokens — netral sejuk + biru langit instansi + warna semantik sesi.
-// Aturan: netral untuk layout, biru langit (#0284C7) untuk brand dan tombol
-// utama, warna sesi hanya untuk makna (datang = biru langit, pulang =
-// oranye, izin = merah). Satu keluarga abu sejuk, tidak campur hangat-dingin.
+// Design tokens — putih-biru mengikuti referensi (1.jpeg / 2.jpeg).
+// Background putih kebiruan, kartu putih, brand biru (#2196F3).
+// Masuk = biru terang, pulang = oranye, izin/sakit = merah semantik.
 
 export const colors = {
-  background: '#F2F6FA',
+  background: '#F4F7FD',
   surface: '#FFFFFF',
-  surfaceSoft: '#E9F2F9',
+  surfaceSoft: '#EAF2FB',
   ink: '#0C1B2A',
   muted: '#526277',
   faint: '#8AA0B4',
-  border: '#E1E9F1',
+  border: '#DFE9F4',
   borderStrong: '#C3D4E3',
-  primary: '#0284C7',
-  primaryDark: '#0369A1',
-  primarySoft: '#E0F2FE',
-  // Semantik sesi — satu-satunya warna bermakna selain brand
-  masuk: '#0284C7',
-  masukSoft: '#E0F2FE',
+  primary: '#2196F3',
+  primaryDark: '#1976D2',
+  primarySoft: '#E3F2FD',
+  // Semantik sesi — masuk biru, pulang oranye, izin merah
+  masuk: '#2196F3',
+  masukSoft: '#E3F2FD',
   pulang: '#EA580C',
   pulangSoft: '#FFEDD5',
   izin: '#DC2626',

@@ -52,35 +52,48 @@ export const MapView: React.FC<MapViewProps> = ({
         <link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css" />
         <script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js"></script>
         <style>
-          html, body, #map { height: 100%; width: 100%; margin: 0; padding: 0; background: #f8fafc; }
-          .user-icon { background: #0284c7; border: 2px solid white; border-radius: 50%; box-shadow: 0 0 8px rgba(2, 132, 199, 0.7); }
-          .office-icon { background: #0f172a; border: 2px solid white; border-radius: 50%; box-shadow: 0 0 8px rgba(15, 23, 42, 0.7); }
+          html, body, #map { height: 100%; width: 100%; margin: 0; padding: 0; background: #eaf2fb; }
+          .user-icon { background: #2196F3; border: 2px solid white; border-radius: 50%; box-shadow: 0 0 8px rgba(33, 150, 243, 0.7); }
+          .office-icon { background: #1565C0; border: 2px solid white; border-radius: 50%; box-shadow: 0 0 8px rgba(21, 101, 192, 0.7); }
         </style>
       </head>
       <body>
         <div id="map"></div>
         <script>
-          var map = L.map('map', { zoomControl: false }).setView([${officeLat}, ${officeLng}], 16);
+          var oLat = Number(${officeLat}) || -6.2088;
+          var oLng = Number(${officeLng}) || 106.8456;
+          var uLat = Number(${userLat}) || oLat;
+          var uLng = Number(${userLng}) || oLng;
+          var rad = Number(${radiusMeters}) || 150;
+
+          // Batasi zoom out minimal level 10 (area regional) agar tidak bisa ke skala benua/dunia
+          var map = L.map('map', {
+            zoomControl: false,
+            minZoom: 10,
+            maxZoom: 19
+          }).setView([oLat, oLng], 16);
+
           L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png', {
+            minZoom: 10,
             maxZoom: 19,
             attribution: 'OpenStreetMap'
           }).addTo(map);
 
           // Geofence Circle
-          var circle = L.circle([${officeLat}, ${officeLng}], {
-            color: '#0f172a',
-            fillColor: '#64748b',
-            fillOpacity: 0.2,
-            radius: ${radiusMeters}
+          var circle = L.circle([oLat, oLng], {
+            color: '#2196F3',
+            fillColor: '#2196F3',
+            fillOpacity: 0.25,
+            radius: rad
           }).addTo(map);
 
           // Office Marker
-          var officeIcon = L.divIcon({ className: 'office-icon', iconSize: [16, 16] });
-          var officeMarker = L.marker([${officeLat}, ${officeLng}], { icon: officeIcon }).addTo(map).bindPopup("<b>Titik Kantor</b>");
+          var officeIcon = L.divIcon({ className: 'office-icon', iconSize: [18, 18] });
+          var officeMarker = L.marker([oLat, oLng], { icon: officeIcon }).addTo(map).bindPopup("<b>Titik Kantor</b>");
 
           // User Marker
-          var userIcon = L.divIcon({ className: 'user-icon', iconSize: [16, 16] });
-          L.marker([${userLat}, ${userLng}], { icon: userIcon }).addTo(map).bindPopup("<b>Lokasi Anda</b>");
+          var userIcon = L.divIcon({ className: 'user-icon', iconSize: [18, 18] });
+          var userMarker = L.marker([uLat, uLng], { icon: userIcon }).addTo(map).bindPopup("<b>Lokasi Anda</b>");
 
           ${
             interactivePicker
@@ -105,12 +118,13 @@ export const MapView: React.FC<MapViewProps> = ({
               : ''
           }
 
-          // Fit map bounds
-          var group = new L.featureGroup([
-            L.marker([${officeLat}, ${officeLng}]),
-            L.marker([${userLat}, ${userLng}])
-          ]);
-          map.fitBounds(group.getBounds().pad(0.2));
+          // Otomatis fokus ke kantor atau jika jarak user dekat fokus mencakup keduanya
+          try {
+            var group = new L.featureGroup([officeMarker, userMarker]);
+            map.fitBounds(group.getBounds().pad(0.3), { maxZoom: 17 });
+          } catch(e) {
+            map.setView([oLat, oLng], 16);
+          }
         </script>
       </body>
     </html>
@@ -156,7 +170,7 @@ const styles = StyleSheet.create({
     borderRadius: 12,
     overflow: 'hidden',
     borderWidth: 1,
-    borderColor: '#E3E1DD',
-    backgroundColor: '#F7F6F3',
+    borderColor: '#DFE9F4',
+    backgroundColor: '#F4F7FD',
   },
 });

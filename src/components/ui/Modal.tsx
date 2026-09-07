@@ -39,7 +39,7 @@ export const Modal: React.FC<ModalProps> = ({ visible, onClose, title, children 
 const styles = StyleSheet.create({
   overlay: {
     flex: 1,
-    backgroundColor: 'rgba(28, 25, 23, 0.5)',
+    backgroundColor: 'rgba(12, 27, 42, 0.5)',
     justifyContent: 'flex-end',
   },
   sheet: {
@@ -51,6 +51,9 @@ const styles = StyleSheet.create({
     paddingHorizontal: spacing.lg,
     paddingTop: spacing.sm,
     paddingBottom: spacing.xl,
+    maxWidth: 520,
+    width: '100%',
+    alignSelf: 'center',
   },
   handle: {
     width: 44,

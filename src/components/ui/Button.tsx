@@ -18,6 +18,7 @@ interface ButtonProps extends TouchableOpacityProps {
   loading?: boolean;
   fullWidth?: boolean;
   style?: StyleProp<ViewStyle>;
+  textColor?: string;
 }
 
 export const Button: React.FC<ButtonProps> = ({
@@ -28,6 +29,7 @@ export const Button: React.FC<ButtonProps> = ({
   fullWidth = true,
   disabled,
   style,
+  textColor,
   ...props
 }) => {
   const palette = {
@@ -36,6 +38,9 @@ export const Button: React.FC<ButtonProps> = ({
     outline: { bg: colors.surface, text: colors.ink, border: colors.borderStrong },
     danger: { bg: colors.surface, text: colors.danger, border: colors.danger },
   }[variant];
+
+  const effectiveTextColor = textColor || (disabled ? colors.faint : palette.text);
+  const iconColor = textColor || (disabled ? colors.faint : palette.text);
 
   return (
     <TouchableOpacity
@@ -50,11 +55,11 @@ export const Button: React.FC<ButtonProps> = ({
       {...props}
     >
       {loading ? (
-        <ActivityIndicator color={palette.text} size="small" />
+        <ActivityIndicator color={textColor || palette.text} size="small" />
       ) : (
         <>
-          {icon && <Feather name={icon} size={20} color={palette.text} style={styles.icon} />}
-          <Text style={[styles.text, { color: disabled ? colors.faint : palette.text }]}>{title}</Text>
+          {icon && <Feather name={icon} size={20} color={iconColor} style={styles.icon} />}
+          <Text style={[styles.text, { color: effectiveTextColor }]}>{title}</Text>
         </>
       )}
     </TouchableOpacity>
@@ -67,7 +72,7 @@ const styles = StyleSheet.create({
     alignItems: 'center',
     justifyContent: 'center',
     paddingVertical: 16,
-    paddingHorizontal: 20,
+    paddingHorizontal: 24,
     borderRadius: radius.md,
     borderWidth: 1,
     minHeight: touch.buttonMinHeight,
@@ -76,10 +81,11 @@ const styles = StyleSheet.create({
     width: '100%',
   },
   icon: {
-    marginRight: 10,
+    marginRight: 12,
   },
   text: {
     fontSize: fontSize.md,
     fontWeight: '700',
+    letterSpacing: 0.3,
   },
 });

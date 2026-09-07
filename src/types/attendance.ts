@@ -14,6 +14,9 @@ export interface UserProfile {
   department?: string;
   avatarUrl?: string;
   createdBy?: string | null;
+  phoneNumber?: string;
+  deviceModel?: string;
+  deviceId?: string;
 }
 
 export interface OfficeSettings {

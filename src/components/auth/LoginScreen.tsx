@@ -14,7 +14,7 @@ import { Feather } from '@expo/vector-icons';
 import { AttendanceService } from '../../services/attendanceService';
 import { UserProfile } from '../../types/attendance';
 import { Button } from '../ui/Button';
-import { colors, fontSize, radius, spacing, touch } from '../../theme';
+import { colors, fontSize, radius, spacing } from '../../theme';
 
 interface LoginScreenProps {
   onLoginSuccess: (user?: UserProfile) => void;
@@ -60,7 +60,7 @@ export const LoginScreen: React.FC<LoginScreenProps> = ({ onLoginSuccess }) => {
         >
           <View style={styles.brand}>
             <View style={styles.logo}>
-              <Feather name="check-square" size={30} color="#FFFFFF" />
+              <Feather name="check-square" size={28} color="#FFFFFF" />
             </View>
             <Text style={styles.title}>E-Presensi</Text>
             <Text style={styles.subtitle}>Absensi karyawan yang mudah dipakai</Text>
@@ -77,43 +77,47 @@ export const LoginScreen: React.FC<LoginScreenProps> = ({ onLoginSuccess }) => {
               </View>
             )}
 
-            <Text style={styles.label}>Email</Text>
-            <View style={styles.inputRow}>
-              <Feather name="mail" size={20} color={colors.faint} style={styles.inputIcon} />
-              <TextInput
-                style={styles.input}
-                placeholder="nama@kantor.com"
-                placeholderTextColor={colors.faint}
-                value={email}
-                onChangeText={setEmail}
-                autoCapitalize="none"
-                keyboardType="email-address"
-                autoComplete="email"
-                returnKeyType="next"
-              />
+            <View style={styles.field}>
+              <Text style={styles.label}>Email</Text>
+              <View style={styles.inputRow}>
+                <Feather name="mail" size={18} color={colors.faint} style={styles.inputIcon} />
+                <TextInput
+                  style={styles.input}
+                  placeholder="nama@kantor.com"
+                  placeholderTextColor={colors.faint}
+                  value={email}
+                  onChangeText={setEmail}
+                  autoCapitalize="none"
+                  keyboardType="email-address"
+                  autoComplete="email"
+                  returnKeyType="next"
+                />
+              </View>
             </View>
 
-            <Text style={styles.label}>Kata sandi</Text>
-            <View style={styles.inputRow}>
-              <Feather name="lock" size={20} color={colors.faint} style={styles.inputIcon} />
-              <TextInput
-                style={styles.input}
-                placeholder="Kata sandi"
-                placeholderTextColor={colors.faint}
-                value={password}
-                onChangeText={setPassword}
-                secureTextEntry={!showPassword}
-                autoComplete="password"
-                returnKeyType="done"
-                onSubmitEditing={handleLogin}
-              />
-              <TouchableOpacity
-                onPress={() => setShowPassword((v) => !v)}
-                style={styles.eyeBtn}
-                hitSlop={12}
-              >
-                <Feather name={showPassword ? 'eye-off' : 'eye'} size={20} color={colors.muted} />
-              </TouchableOpacity>
+            <View style={styles.field}>
+              <Text style={styles.label}>Kata sandi</Text>
+              <View style={styles.inputRow}>
+                <Feather name="lock" size={18} color={colors.faint} style={styles.inputIcon} />
+                <TextInput
+                  style={styles.input}
+                  placeholder="Kata sandi"
+                  placeholderTextColor={colors.faint}
+                  value={password}
+                  onChangeText={setPassword}
+                  secureTextEntry={!showPassword}
+                  autoComplete="password"
+                  returnKeyType="done"
+                  onSubmitEditing={handleLogin}
+                />
+                <TouchableOpacity
+                  onPress={() => setShowPassword((v) => !v)}
+                  style={styles.eyeBtn}
+                  hitSlop={12}
+                >
+                  <Feather name={showPassword ? 'eye-off' : 'eye'} size={18} color={colors.muted} />
+                </TouchableOpacity>
+              </View>
             </View>
 
             <Button
@@ -144,62 +148,76 @@ const styles = StyleSheet.create({
   },
   scroll: {
     flexGrow: 1,
-    padding: spacing.xl,
     justifyContent: 'center',
-    maxWidth: 480,
-    alignSelf: 'center',
     width: '100%',
+    maxWidth: 440,
+    alignSelf: 'center',
+    paddingHorizontal: spacing.lg,
+    paddingVertical: spacing.xl,
   },
   brand: {
     alignItems: 'center',
-    marginBottom: spacing.xl,
+    marginBottom: spacing.lg,
   },
   logo: {
-    width: 72,
-    height: 72,
-    borderRadius: 20,
+    width: 64,
+    height: 64,
+    borderRadius: 18,
     backgroundColor: colors.primary,
     alignItems: 'center',
     justifyContent: 'center',
-    marginBottom: spacing.md,
+    marginBottom: spacing.sm,
+    shadowColor: colors.primary,
+    shadowOffset: { width: 0, height: 4 },
+    shadowOpacity: 0.25,
+    shadowRadius: 10,
+    elevation: 4,
   },
   title: {
-    fontSize: fontSize.xxl,
+    fontSize: fontSize.xl,
     fontWeight: '700',
     color: colors.ink,
+    textAlign: 'center',
   },
   subtitle: {
-    fontSize: fontSize.md,
+    fontSize: fontSize.sm,
     color: colors.muted,
-    marginTop: 6,
+    marginTop: 4,
     textAlign: 'center',
   },
   card: {
     backgroundColor: colors.surface,
     borderRadius: radius.lg,
-    padding: spacing.xl,
+    padding: spacing.lg,
     borderWidth: 1,
     borderColor: colors.border,
+    shadowColor: colors.primary,
+    shadowOffset: { width: 0, height: 2 },
+    shadowOpacity: 0.08,
+    shadowRadius: 16,
+    elevation: 3,
   },
   cardTitle: {
-    fontSize: fontSize.xl,
+    fontSize: fontSize.lg,
     fontWeight: '700',
     color: colors.ink,
+    textAlign: 'center',
   },
   cardHint: {
     fontSize: fontSize.sm,
     color: colors.muted,
     marginTop: 4,
-    marginBottom: spacing.lg,
-    lineHeight: 21,
+    marginBottom: spacing.md,
+    lineHeight: 22,
+    textAlign: 'center',
   },
   errorBox: {
     flexDirection: 'row',
     alignItems: 'center',
-    gap: 10,
     backgroundColor: colors.dangerSoft,
     borderRadius: radius.md,
-    padding: spacing.md,
+    paddingVertical: spacing.sm,
+    paddingHorizontal: spacing.md,
     marginBottom: spacing.md,
   },
   errorText: {
@@ -207,45 +225,51 @@ const styles = StyleSheet.create({
     fontSize: fontSize.sm,
     color: colors.danger,
     fontWeight: '600',
-    lineHeight: 21,
+    lineHeight: 22,
+  },
+  field: {
+    marginBottom: spacing.md,
   },
   label: {
-    fontSize: fontSize.md,
+    fontSize: fontSize.sm,
     fontWeight: '700',
     color: colors.ink,
     marginBottom: 8,
-    marginTop: spacing.md,
   },
   inputRow: {
     flexDirection: 'row',
     alignItems: 'center',
-    backgroundColor: colors.surface,
-    borderWidth: 1,
-    borderColor: colors.borderStrong,
+    backgroundColor: '#F8FBFE',
+    borderWidth: 1.5,
+    borderColor: colors.border,
     borderRadius: radius.md,
     paddingHorizontal: spacing.md,
-    minHeight: touch.inputMinHeight,
+    minHeight: 54,
   },
   inputIcon: {
-    marginRight: 10,
+    marginRight: spacing.sm,
   },
   input: {
     flex: 1,
-    fontSize: fontSize.md,
+    fontSize: fontSize.sm,
     color: colors.ink,
     paddingVertical: 14,
+    paddingLeft: spacing.xs,
+    paddingRight: spacing.xs,
+    textAlignVertical: 'center',
   },
   eyeBtn: {
     padding: 8,
+    marginLeft: spacing.xs,
   },
   loginBtn: {
-    marginTop: spacing.xl,
+    marginTop: spacing.sm,
   },
   help: {
-    fontSize: fontSize.sm,
+    fontSize: fontSize.xs,
     color: colors.muted,
     textAlign: 'center',
-    marginTop: spacing.lg,
-    lineHeight: 22,
+    marginTop: spacing.md,
+    lineHeight: 20,
   },
 });

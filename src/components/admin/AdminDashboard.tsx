@@ -1,5 +1,7 @@
 import React, { useState } from 'react';
 import {
+  Alert,
+  Platform,
   ScrollView,
   StyleSheet,
   Text,
@@ -13,6 +15,7 @@ import { GeofenceSettings } from './GeofenceSettings';
 import { AttendanceFeed } from './AttendanceFeed';
 import { LeaveDetailModal } from './LeaveDetailModal';
 import { AdminEmployeeManager } from './AdminEmployeeManager';
+import { ConfirmDialog } from '../ui/ConfirmDialog';
 import { Feather } from '@expo/vector-icons';
 import { colors, fontSize, radius } from '../../theme';
 
@@ -37,6 +40,7 @@ export const AdminDashboard: React.FC<AdminDashboardProps> = ({
 }) => {
   const [activeTab, setActiveTab] = useState<'monitoring' | 'geofence' | 'employees'>('monitoring');
   const [selectedRecord, setSelectedRecord] = useState<AttendanceRecord | null>(null);
+  const [showLogoutDialog, setShowLogoutDialog] = useState(false);
 
   const employees = users.filter((u) => u.role === 'employee');
 
@@ -47,6 +51,10 @@ export const AdminDashboard: React.FC<AdminDashboardProps> = ({
 
   const clockedInUserIds = new Set(todayAttendances.map((a) => a.userId));
   const unabsentEmployees = employees.filter((e) => !clockedInUserIds.has(e.id));
+
+  const confirmLogout = () => {
+    setShowLogoutDialog(true);
+  };
 
   return (
     <View style={styles.container}>
@@ -173,9 +181,9 @@ export const AdminDashboard: React.FC<AdminDashboardProps> = ({
         )}
       </ScrollView>
 
-      {/* Minimal Floating Logout Button */}
-      <TouchableOpacity activeOpacity={0.85} onPress={onLogout} style={styles.floatingLogoutBtn}>
-        <Feather name="power" size={20} color="#FFFFFF" />
+      {/* Floating Red Shutdown / Logout Button */}
+      <TouchableOpacity activeOpacity={0.85} onPress={confirmLogout} style={styles.floatingLogoutBtn}>
+        <Feather name="power" size={22} color="#FFFFFF" />
       </TouchableOpacity>
 
       {/* Modal Detail */}
@@ -183,6 +191,19 @@ export const AdminDashboard: React.FC<AdminDashboardProps> = ({
         visible={!!selectedRecord}
         onClose={() => setSelectedRecord(null)}
         record={selectedRecord}
+      />
+
+      {/* Pop-up Modal Konfirmasi Keluar */}
+      <ConfirmDialog
+        visible={showLogoutDialog}
+        onClose={() => setShowLogoutDialog(false)}
+        onConfirm={onLogout}
+        title="Konfirmasi Keluar"
+        message="Apakah Anda yakin ingin keluar dari akun admin? Sesi kerja saat ini akan diakhiri."
+        confirmText="Ya, Keluar"
+        cancelText="Batal"
+        icon="log-out"
+        variant="danger"
       />
     </View>
   );
@@ -306,13 +327,19 @@ const styles = StyleSheet.create({
   },
   floatingLogoutBtn: {
     position: 'absolute',
-    bottom: 18,
-    right: 18,
-    width: 56,
-    height: 56,
-    borderRadius: radius.md,
-    backgroundColor: colors.primary,
+    bottom: 22,
+    right: 20,
+    width: 58,
+    height: 58,
+    borderRadius: 29,
+    backgroundColor: '#DC2626',
     alignItems: 'center',
     justifyContent: 'center',
+    shadowColor: '#DC2626',
+    shadowOffset: { width: 0, height: 4 },
+    shadowOpacity: 0.35,
+    shadowRadius: 8,
+    elevation: 8,
+    zIndex: 40,
   },
 });

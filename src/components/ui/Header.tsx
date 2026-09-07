@@ -1,14 +1,15 @@
 import React from 'react';
-import { Image, StyleSheet, Text, View } from 'react-native';
+import { Image, StyleSheet, Text, TouchableOpacity, View } from 'react-native';
 import { Feather } from '@expo/vector-icons';
 import { UserProfile } from '../../types/attendance';
 import { colors, fontSize, radius, spacing } from '../../theme';
 
 interface HeaderProps {
   user: UserProfile;
+  onPressProfile?: () => void;
 }
 
-export const Header: React.FC<HeaderProps> = ({ user }) => {
+export const Header: React.FC<HeaderProps> = ({ user, onPressProfile }) => {
   const initials = user.fullName
     .split(' ')
     .map((w) => w[0])
@@ -30,7 +31,13 @@ export const Header: React.FC<HeaderProps> = ({ user }) => {
         </View>
       </View>
 
-      <View style={styles.user}>
+      <TouchableOpacity
+        activeOpacity={0.8}
+        onPress={onPressProfile}
+        disabled={!onPressProfile}
+        style={styles.userBtn}
+        hitSlop={8}
+      >
         {user.avatarUrl ? (
           <Image source={{ uri: user.avatarUrl }} style={styles.avatar} />
         ) : (
@@ -38,10 +45,7 @@ export const Header: React.FC<HeaderProps> = ({ user }) => {
             <Text style={styles.avatarText}>{initials}</Text>
           </View>
         )}
-        <Text style={styles.userName} numberOfLines={1}>
-          {user.fullName.split(' ')[0]}
-        </Text>
-      </View>
+      </TouchableOpacity>
     </View>
   );
 };
@@ -80,16 +84,16 @@ const styles = StyleSheet.create({
     color: colors.muted,
     marginTop: 2,
   },
-  user: {
-    flexDirection: 'row',
+  userBtn: {
     alignItems: 'center',
-    maxWidth: 160,
+    justifyContent: 'center',
   },
   avatar: {
     width: 40,
     height: 40,
     borderRadius: 20,
-    marginRight: 8,
+    borderWidth: 1,
+    borderColor: colors.borderStrong,
   },
   avatarFallback: {
     width: 40,
@@ -98,17 +102,12 @@ const styles = StyleSheet.create({
     backgroundColor: colors.primarySoft,
     alignItems: 'center',
     justifyContent: 'center',
-    marginRight: 8,
+    borderWidth: 1,
+    borderColor: colors.primary,
   },
   avatarText: {
     fontSize: fontSize.sm,
     fontWeight: '700',
     color: colors.primary,
-  },
-  userName: {
-    fontSize: fontSize.sm,
-    fontWeight: '700',
-    color: colors.ink,
-    maxWidth: 105,
   },
 });

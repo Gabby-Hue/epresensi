@@ -20,6 +20,7 @@ import { colors } from './src/theme';
 import { LoginScreen } from './src/components/auth/LoginScreen';
 import { AdminDashboard } from './src/components/admin/AdminDashboard';
 import { AttendanceHub } from './src/components/user/AttendanceHub';
+import { ProfileScreen } from './src/components/user/ProfileScreen';
 
 export default function App() {
   const [currentUser, setCurrentUser] = useState<UserProfile | null>(null);
@@ -29,6 +30,7 @@ export default function App() {
   const [userHistory, setUserHistory] = useState<AttendanceRecord[]>([]);
   const [userTodayStatus, setUserTodayStatus] = useState<AttendanceRecord | null>(null);
   const [loading, setLoading] = useState(true);
+  const [showProfilePage, setShowProfilePage] = useState(false);
 
   // Initialize Supabase Auth Session Listener
   useEffect(() => {
@@ -94,6 +96,7 @@ export default function App() {
     setLoading(true);
     await AttendanceService.signOut();
     setCurrentUser(null);
+    setShowProfilePage(false);
     setLoading(false);
   };
 
@@ -138,12 +141,25 @@ export default function App() {
     return <LoginScreen onLoginSuccess={handleLoginSuccess} />;
   }
 
+  // If viewing User Profile screen (contoh.jpeg)
+  if (showProfilePage) {
+    return (
+      <ProfileScreen
+        user={currentUser}
+        onBack={() => setShowProfilePage(false)}
+      />
+    );
+  }
+
   return (
     <SafeAreaView style={styles.container}>
       <StatusBar barStyle="dark-content" backgroundColor="#FFFFFF" />
 
       {/* Header */}
-      <Header user={currentUser} />
+      <Header
+        user={currentUser}
+        onPressProfile={() => setShowProfilePage(true)}
+      />
 
       {/* Main View */}
       <View style={styles.content}>
