@@ -20,6 +20,21 @@
     },
     "web": {
       "favicon": "./assets/favicon.png"
-    }
+    },
+    "plugins": [
+      "expo-sqlite",
+      [
+        "expo-location",
+        {
+          "locationAlwaysAndWhenInUsePermission": "Aplikasi E-Presensi memerlukan akses lokasi untuk verifikasi kehadiran presensi luring."
+        }
+      ],
+      [
+        "expo-camera",
+        {
+          "cameraPermission": "Aplikasi E-Presensi memerlukan akses kamera untuk verifikasi swafoto presensi."
+        }
+      ]
+    ]
   }
 }
