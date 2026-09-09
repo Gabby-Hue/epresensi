@@ -35,15 +35,14 @@ export const AttendanceFeed: React.FC<AttendanceFeedProps> = ({
 
   return (
     <Card
-      title="Monitoring Presensi Hari Ini"
-      subtitle="Daftar kehadiran & pengajuan izin karyawan secara real-time"
+      title="Presensi"
       icon="list"
     >
       <View style={styles.searchBox}>
         <Feather name="search" size={16} color="#9CA3AF" style={styles.searchIcon} />
         <TextInput
           style={styles.searchInput}
-          placeholder="Cari nama karyawan..."
+          placeholder="Cari nama..."
           value={search}
           onChangeText={setSearch}
         />
@@ -69,7 +68,7 @@ export const AttendanceFeed: React.FC<AttendanceFeedProps> = ({
           style={[styles.filterChip, filter === 'luring' && styles.activeChip]}
         >
           <Text style={[styles.filterText, filter === 'luring' && styles.activeFilterText]}>
-            Luring
+            Kantor
           </Text>
         </TouchableOpacity>
 
@@ -78,7 +77,7 @@ export const AttendanceFeed: React.FC<AttendanceFeedProps> = ({
           style={[styles.filterChip, filter === 'daring' && styles.activeChip]}
         >
           <Text style={[styles.filterText, filter === 'daring' && styles.activeFilterText]}>
-            Daring
+            Rumah
           </Text>
         </TouchableOpacity>
 
@@ -87,7 +86,7 @@ export const AttendanceFeed: React.FC<AttendanceFeedProps> = ({
           style={[styles.filterChip, filter === 'izin_sakit' && styles.activeChip]}
         >
           <Text style={[styles.filterText, filter === 'izin_sakit' && styles.activeFilterText]}>
-            Izin / Sakit
+            Izin
           </Text>
         </TouchableOpacity>
       </View>
@@ -95,7 +94,7 @@ export const AttendanceFeed: React.FC<AttendanceFeedProps> = ({
       {filtered.length === 0 ? (
         <View style={styles.emptyBox}>
           <Feather name="inbox" size={36} color={colors.faint} />
-          <Text style={styles.emptyText}>Belum ada data presensi yang sesuai.</Text>
+          <Text style={styles.emptyText}>Belum ada data.</Text>
         </View>
       ) : (
         filtered.map((item) => (
@@ -121,14 +120,8 @@ export const AttendanceFeed: React.FC<AttendanceFeedProps> = ({
                   {new Date(item.clockInTime).toLocaleTimeString('id-ID', {
                     hour: '2-digit',
                     minute: '2-digit',
-                  })}{' '}
-                  WIB {item.distanceMeters ? `• ${item.distanceMeters}m` : ''}
+                  })}
                 </Text>
-                {item.reason && (
-                  <Text style={styles.reasonText} numberOfLines={1}>
-                    "{item.reason}"
-                  </Text>
-                )}
               </View>
             </View>
 
@@ -215,16 +208,19 @@ const styles = StyleSheet.create({
   thumbnail: {
     width: 52,
     height: 52,
-    borderRadius: 8,
+    borderRadius: 26,
     marginRight: 12,
+    borderWidth: 2,
+    borderColor: '#FFFFFF',
+    backgroundColor: colors.surfaceSoft,
   },
   thumbFallback: {
     width: 52,
     height: 52,
-    borderRadius: 8,
+    borderRadius: 26,
     backgroundColor: colors.surfaceSoft,
-    borderWidth: 1,
-    borderColor: colors.border,
+    borderWidth: 2,
+    borderColor: '#FFFFFF',
     alignItems: 'center',
     justifyContent: 'center',
     marginRight: 12,

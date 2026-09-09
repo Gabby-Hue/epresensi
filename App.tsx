@@ -1,11 +1,11 @@
 import React, { useEffect, useState } from 'react';
 import {
   ActivityIndicator,
-  SafeAreaView,
   StatusBar,
   StyleSheet,
   View,
 } from 'react-native';
+import { SafeAreaProvider, SafeAreaView } from 'react-native-safe-area-context';
 import {
   AttendanceRecord,
   AttendanceType,
@@ -22,7 +22,7 @@ import { AdminDashboard } from './src/components/admin/AdminDashboard';
 import { AttendanceHub } from './src/components/user/AttendanceHub';
 import { ProfileScreen } from './src/components/user/ProfileScreen';
 
-export default function App() {
+function AppContent() {
   const [currentUser, setCurrentUser] = useState<UserProfile | null>(null);
   const [officeSettings, setOfficeSettings] = useState<OfficeSettings | null>(null);
   const [allUsers, setAllUsers] = useState<UserProfile[]>([]);
@@ -152,53 +152,61 @@ export default function App() {
   }
 
   return (
-    <SafeAreaView style={styles.container}>
+    <SafeAreaView style={styles.container} edges={['top', 'bottom', 'left', 'right']}>
       <StatusBar barStyle="dark-content" backgroundColor="#FFFFFF" />
 
-      {/* Header */}
-      <Header
-        user={currentUser}
-        onPressProfile={() => setShowProfilePage(true)}
-      />
+        {/* Header */}
+        <Header
+          user={currentUser}
+          onPressProfile={() => setShowProfilePage(true)}
+        />
 
-      {/* Main View */}
-      <View style={styles.content}>
-        {currentUser.role === 'admin' ? (
-          <AdminDashboard
-            currentAdmin={currentUser}
-            users={allUsers}
-            todayAttendances={todayAttendances}
-            officeSettings={officeSettings || {
-              id: '1',
-              officeName: 'Kantor Utama',
-              latitude: -6.2088,
-              longitude: 106.8456,
-              radiusMeters: 150,
-              updatedAt: new Date().toISOString(),
-            }}
-            onUpdateOfficeSettings={handleUpdateOfficeSettings}
-            onRefreshUsers={loadDataForRole}
-            onLogout={handleLogout}
-          />
-        ) : (
-          <AttendanceHub
-            user={currentUser}
-            officeSettings={officeSettings || {
-              id: '1',
-              officeName: 'Kantor Utama',
-              latitude: -6.2088,
-              longitude: 106.8456,
-              radiusMeters: 150,
-              updatedAt: new Date().toISOString(),
-            }}
-            userTodayStatus={userTodayStatus}
-            userHistory={userHistory}
-            onClockIn={handleUserClockIn}
-            onLogout={handleLogout}
-          />
-        )}
+        {/* Main View */}
+        <View style={styles.content}>
+          {currentUser.role === 'admin' ? (
+            <AdminDashboard
+              currentAdmin={currentUser}
+              users={allUsers}
+              todayAttendances={todayAttendances}
+              officeSettings={officeSettings || {
+                id: '1',
+                officeName: 'Kantor Utama',
+                latitude: -6.2088,
+                longitude: 106.8456,
+                radiusMeters: 150,
+                updatedAt: new Date().toISOString(),
+              }}
+              onUpdateOfficeSettings={handleUpdateOfficeSettings}
+              onRefreshUsers={loadDataForRole}
+              onLogout={handleLogout}
+            />
+          ) : (
+            <AttendanceHub
+              user={currentUser}
+              officeSettings={officeSettings || {
+                id: '1',
+                officeName: 'Kantor Utama',
+                latitude: -6.2088,
+                longitude: 106.8456,
+                radiusMeters: 150,
+                updatedAt: new Date().toISOString(),
+              }}
+              userTodayStatus={userTodayStatus}
+              userHistory={userHistory}
+              onClockIn={handleUserClockIn}
+              onLogout={handleLogout}
+            />
+          )}
       </View>
     </SafeAreaView>
+  );
+}
+
+export default function App() {
+  return (
+    <SafeAreaProvider>
+      <AppContent />
+    </SafeAreaProvider>
   );
 }
 

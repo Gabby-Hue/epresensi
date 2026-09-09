@@ -40,6 +40,7 @@ export const AdminEmployeeManager: React.FC<AdminEmployeeManagerProps> = ({
   const [editSaving, setEditSaving] = useState(false);
   const [editError, setEditError] = useState<string | null>(null);
   const [deletingId, setDeletingId] = useState<string | null>(null);
+  const [resettingId, setResettingId] = useState<string | null>(null);
 
   const handleCreateAccount = async () => {
     setFormError(null);
@@ -102,6 +103,26 @@ export const AdminEmployeeManager: React.FC<AdminEmployeeManagerProps> = ({
     onChanged();
   };
 
+  const handleResetDevice = (item: UserProfile) => {
+    Alert.alert(
+      'Atur ulang perangkat?',
+      `${item.fullName} bisa login dari HP baru. HP baru itu otomatis jadi perangkat resminya.`,
+      [
+        { text: 'Batal', style: 'cancel' },
+        {
+          text: 'Reset',
+          onPress: async () => {
+            setResettingId(item.id);
+            const { success, message } = await AttendanceService.resetEmployeeDevice(item.id);
+            setResettingId(null);
+            Alert.alert(success ? 'Berhasil' : 'Gagal', message);
+            if (success) onChanged();
+          },
+        },
+      ]
+    );
+  };
+
   const handleDelete = (item: UserProfile) => {
     Alert.alert(
       'Hapus akun?',
@@ -150,6 +171,16 @@ export const AdminEmployeeManager: React.FC<AdminEmployeeManagerProps> = ({
           />
         </View>
         <View style={styles.formGroup}>
+          <Text style={styles.label}>Departemen</Text>
+          <TextInput
+            style={styles.input}
+            placeholder="Contoh: Umum, Keuangan"
+            placeholderTextColor={colors.faint}
+            value={department}
+            onChangeText={setDepartment}
+          />
+        </View>
+        <View style={styles.formGroup}>
           <Text style={styles.label}>Email</Text>
           <TextInput
             style={styles.input}
@@ -176,16 +207,7 @@ export const AdminEmployeeManager: React.FC<AdminEmployeeManagerProps> = ({
               <Feather name={showPassword ? 'eye-off' : 'eye'} size={20} color={colors.muted} />
             </TouchableOpacity>
           </View>
-        </View>
-        <View style={styles.formGroup}>
-          <Text style={styles.label}>Departemen</Text>
-          <TextInput
-            style={styles.input}
-            placeholder="Contoh: Umum, Keuangan"
-            placeholderTextColor={colors.faint}
-            value={department}
-            onChangeText={setDepartment}
-          />
+          <Text style={styles.hint}>Perangkat terkunci otomatis saat karyawan pertama kali login dari HP-nya.</Text>
         </View>
         <Button
           title={loading ? 'Mendaftarkan...' : 'Daftarkan akun'}
@@ -215,7 +237,24 @@ export const AdminEmployeeManager: React.FC<AdminEmployeeManagerProps> = ({
                 <Text style={styles.userName}>{item.fullName}</Text>
                 <Text style={styles.userEmail}>{item.email}</Text>
                 <Text style={styles.userEmail}>{item.department || 'Staff'}</Text>
+                <Text style={styles.deviceText}>
+                  {item.deviceModel || item.deviceId
+                    ? `Terkunci: ${item.deviceModel || item.deviceId}`
+                    : 'Belum ada perangkat terkunci'}
+                </Text>
               </View>
+              <TouchableOpacity
+                onPress={() => handleResetDevice(item)}
+                style={styles.iconBtn}
+                hitSlop={12}
+                disabled={resettingId === item.id || (!item.deviceId && !item.deviceModel)}
+              >
+                <Feather
+                  name="smartphone"
+                  size={18}
+                  color={resettingId === item.id || (!item.deviceId && !item.deviceModel) ? colors.faint : colors.primary}
+                />
+              </TouchableOpacity>
               <TouchableOpacity onPress={() => openEdit(item)} style={styles.iconBtn} hitSlop={12}>
                 <Feather name="edit-2" size={18} color={colors.primary} />
               </TouchableOpacity>
@@ -295,6 +334,12 @@ const styles = StyleSheet.create({
   },
   formGroup: {
     marginBottom: 12,
+  },
+  hint: {
+    fontSize: 12,
+    color: colors.muted,
+    marginTop: 6,
+    lineHeight: 18,
   },
   label: {
     fontSize: fontSize.xs,
@@ -386,6 +431,12 @@ const styles = StyleSheet.create({
   userEmail: {
     fontSize: fontSize.xs,
     color: colors.muted,
+  },
+  deviceText: {
+    fontSize: 11,
+    color: colors.primaryDark,
+    fontWeight: '700',
+    marginTop: 2,
   },
   deptBadge: {
     backgroundColor: colors.background,

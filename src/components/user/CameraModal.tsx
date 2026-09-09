@@ -3,12 +3,12 @@ import {
   Image,
   Modal,
   Platform,
-  SafeAreaView,
   StyleSheet,
   Text,
   TouchableOpacity,
   View,
 } from 'react-native';
+import { SafeAreaView } from 'react-native-safe-area-context';
 import { CameraView, useCameraPermissions } from 'expo-camera';
 import { Button } from '../ui/Button';
 import { Feather } from '@expo/vector-icons';
@@ -341,16 +341,23 @@ const styles = StyleSheet.create({
     flex: 1,
   },
   photoFrame: {
-    width: 280,
-    height: 280,
-    borderRadius: 12,
-    borderWidth: 1,
-    borderColor: '#CFCBC4',
+    width: 250,
+    height: 330,
+    borderRadius: 125,
+    borderWidth: 4,
+    borderColor: '#2196F3',
     overflow: 'hidden',
+    backgroundColor: '#FFFFFF',
+    shadowColor: '#2196F3',
+    shadowOffset: { width: 0, height: 4 },
+    shadowOpacity: 0.18,
+    shadowRadius: 12,
+    elevation: 5,
   },
   previewImage: {
     width: '100%',
     height: '100%',
+    resizeMode: 'cover',
   },
   actionRow: {
     flexDirection: 'row',
@@ -359,16 +366,17 @@ const styles = StyleSheet.create({
   },
   cameraViewArea: {
     flex: 1,
-    backgroundColor: '#1C1917',
+    backgroundColor: '#FFFFFF',
   },
   webCameraContainer: {
     flex: 1,
-    backgroundColor: '#1C1917',
+    backgroundColor: '#FFFFFF',
   },
   videoWrapper: {
     flex: 1,
     position: 'relative',
     overflow: 'hidden',
+    backgroundColor: '#F8FBFF',
   },
   webErrorBox: {
     flex: 1,
@@ -400,25 +408,27 @@ const styles = StyleSheet.create({
     bottom: 0,
     alignItems: 'center',
     justifyContent: 'center',
-    backgroundColor: 'rgba(28, 25, 23, 0.35)',
+    backgroundColor: 'transparent',
   },
+  // Oval portrait menyerupai wajah — bukan lingkaran bulat, bukan kotak
   targetCircle: {
-    width: 260,
-    height: 260,
-    borderRadius: 12,
+    width: 230,
+    height: 310,
+    borderRadius: 115,
     borderWidth: 3,
-    borderColor: '#FFFFFF',
+    borderColor: '#2196F3',
     borderStyle: 'dashed',
+    backgroundColor: 'transparent',
   },
   targetGuideText: {
-    color: '#FFFFFF',
+    color: '#1C1917',
     fontSize: 15,
     fontWeight: '700',
     marginTop: 16,
-    backgroundColor: 'rgba(28, 25, 23, 0.85)',
+    backgroundColor: 'rgba(255, 255, 255, 0.92)',
     paddingHorizontal: 16,
     paddingVertical: 8,
-    borderRadius: 6,
+    borderRadius: 20,
   },
   bottomControls: {
     flexDirection: 'column',

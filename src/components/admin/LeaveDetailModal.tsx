@@ -19,13 +19,11 @@ export const LeaveDetailModal: React.FC<LeaveDetailModalProps> = ({
 }) => {
   if (!record) return null;
 
-  const isSick = record.status === 'sakit' || record.type === 'izin_sakit';
-
   return (
     <Modal
       visible={visible}
       onClose={onClose}
-      title={isSick ? 'Detail Izin / Sakit Karyawan' : 'Detail Presensi Karyawan'}
+      title="Detail"
     >
       <ScrollView showsVerticalScrollIndicator={false} contentContainerStyle={styles.scroll}>
         <View style={styles.userCard}>
@@ -40,42 +38,31 @@ export const LeaveDetailModal: React.FC<LeaveDetailModalProps> = ({
         </View>
 
         <View style={styles.section}>
-          <Text style={styles.sectionTitle}>Informasi Pengajuan</Text>
-          
           <View style={styles.infoRow}>
             <Feather name="calendar" size={16} color={colors.muted} style={styles.infoIcon} />
-            <Text style={styles.infoLabel}>Tanggal Izin:</Text>
             <Text style={styles.infoValue}>
               {record.startDate && record.endDate && record.startDate !== record.endDate
-                ? `${record.startDate} s/d ${record.endDate}`
+                ? `${record.startDate} - ${record.endDate}`
                 : record.date}
-            </Text>
-          </View>
-
-          <View style={styles.infoRow}>
-            <Feather name="clock" size={16} color={colors.muted} style={styles.infoIcon} />
-            <Text style={styles.infoLabel}>Waktu Pengajuan:</Text>
-            <Text style={styles.infoValue}>
+              {' • '}
               {new Date(record.clockInTime).toLocaleTimeString('id-ID', {
                 hour: '2-digit',
                 minute: '2-digit',
-              })} WIB
+              })}
             </Text>
           </View>
         </View>
 
         <View style={styles.section}>
-          <Text style={styles.sectionTitle}>Deskripsi / Alasan:</Text>
           <View style={styles.reasonBox}>
             <Text style={styles.reasonText}>
-              {record.reason || 'Tidak ada alasan khusus dicantumkan.'}
+              {record.reason || '-'}
             </Text>
           </View>
         </View>
 
         {record.documentUrl && (
           <View style={styles.section}>
-            <Text style={styles.sectionTitle}>Lampiran Dokumen / Surat Dokter:</Text>
             <View style={styles.imageBox}>
               <Image source={{ uri: record.documentUrl }} style={styles.docImage} resizeMode="cover" />
             </View>
@@ -84,7 +71,6 @@ export const LeaveDetailModal: React.FC<LeaveDetailModalProps> = ({
 
         {record.photoUrl && (
           <View style={styles.section}>
-            <Text style={styles.sectionTitle}>Bukti Swafoto Presensi:</Text>
             <View style={styles.imageBox}>
               <Image source={{ uri: record.photoUrl }} style={styles.docImage} resizeMode="cover" />
             </View>
@@ -137,23 +123,12 @@ const styles = StyleSheet.create({
   section: {
     marginBottom: 16,
   },
-  sectionTitle: {
-    fontSize: fontSize.xs,
-    fontWeight: '700',
-    color: colors.muted,
-    marginBottom: 8,
-  },
   infoRow: {
     flexDirection: 'row',
     alignItems: 'center',
     marginBottom: 6,
   },
   infoIcon: {
-    marginRight: 6,
-  },
-  infoLabel: {
-    fontSize: fontSize.xs,
-    color: colors.muted,
     marginRight: 6,
   },
   infoValue: {

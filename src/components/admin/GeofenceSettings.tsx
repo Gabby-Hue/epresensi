@@ -5,7 +5,6 @@ import { Card } from '../ui/Card';
 import { Button } from '../ui/Button';
 import { MapView } from '../ui/MapView';
 import { getCurrentLocation } from '../../services/locationService';
-import { Feather } from '@expo/vector-icons';
 import { colors, fontSize, radius } from '../../theme';
 
 interface GeofenceSettingsProps {
@@ -44,7 +43,7 @@ export const GeofenceSettings: React.FC<GeofenceSettingsProps> = ({
     setFetchingGps(false);
 
     if (errorMsg) {
-      Alert.alert('Info Lokasi', errorMsg);
+      Alert.alert('GPS', errorMsg);
     }
 
     setLatitude(coords.latitude.toFixed(6));
@@ -62,7 +61,7 @@ export const GeofenceSettings: React.FC<GeofenceSettingsProps> = ({
     const rad = parseInt(radiusMeters, 10);
 
     if (isNaN(lat) || isNaN(lng) || isNaN(rad) || rad <= 0) {
-      Alert.alert('Input Tidak Valid', 'Mohon isi latitude, longitude, dan radius yang valid.');
+      Alert.alert('Tidak valid', 'Periksa lat, lng, dan radius.');
       return;
     }
 
@@ -75,24 +74,16 @@ export const GeofenceSettings: React.FC<GeofenceSettingsProps> = ({
     });
     setSaving(false);
 
-    Alert.alert('Berhasil', 'Titik presensi & radius kantor berhasil disimpan ke Supabase!');
+    Alert.alert('Berhasil', 'Lokasi tersimpan.');
   };
 
   return (
     <Card
-      title="Pengaturan Titik & Radius Absensi"
-      subtitle="Klik pada peta di bawah atau isi koordinat untuk memilih lokasi kantor"
+      title="Lokasi Kantor"
       icon="map-pin"
     >
       {/* Interactive Map Picker Section */}
       <View style={styles.mapPickerBox}>
-        <View style={styles.pickerGuideBanner}>
-          <Feather name="mouse-pointer" size={14} color={colors.ink} style={{ marginRight: 6 }} />
-          <Text style={styles.pickerGuideText}>
-            PILIH LOKASI: Klik/Ketuk mana saja pada peta untuk menentukan titik kantor
-          </Text>
-        </View>
-
         <MapView
           userLat={latNum}
           userLng={lngNum}
@@ -106,18 +97,18 @@ export const GeofenceSettings: React.FC<GeofenceSettingsProps> = ({
       </View>
 
       <View style={styles.formGroup}>
-        <Text style={styles.label}>Nama Kantor / Lokasi:</Text>
+        <Text style={styles.label}>Nama</Text>
         <TextInput
           style={styles.input}
           value={officeName}
           onChangeText={setOfficeName}
-          placeholder="Nama Kantor Utama"
+          placeholder="Kantor Utama"
         />
       </View>
 
       <View style={styles.row}>
         <View style={[styles.formGroup, { flex: 1, marginRight: 6 }]}>
-          <Text style={styles.label}>Latitude:</Text>
+          <Text style={styles.label}>Lat</Text>
           <TextInput
             style={styles.input}
             value={latitude}
@@ -127,7 +118,7 @@ export const GeofenceSettings: React.FC<GeofenceSettingsProps> = ({
           />
         </View>
         <View style={[styles.formGroup, { flex: 1, marginLeft: 6 }]}>
-          <Text style={styles.label}>Longitude:</Text>
+          <Text style={styles.label}>Lng</Text>
           <TextInput
             style={styles.input}
             value={longitude}
@@ -139,7 +130,7 @@ export const GeofenceSettings: React.FC<GeofenceSettingsProps> = ({
       </View>
 
       <Button
-        title={fetchingGps ? 'Mengambil GPS...' : 'Gunakan Koordinat GPS Perangkat'}
+        title={fetchingGps ? 'Mengambil GPS...' : 'Pakai GPS saat ini'}
         variant="outline"
         icon="crosshair"
         loading={fetchingGps}
@@ -148,7 +139,7 @@ export const GeofenceSettings: React.FC<GeofenceSettingsProps> = ({
       />
 
       <View style={styles.formGroup}>
-        <Text style={styles.label}>Radius Absensi Luring (Meter):</Text>
+        <Text style={styles.label}>Radius (m)</Text>
         <View style={styles.radiusRow}>
           <TextInput
             style={[styles.input, { flex: 1 }]}
@@ -158,23 +149,13 @@ export const GeofenceSettings: React.FC<GeofenceSettingsProps> = ({
             placeholder="150"
           />
           <View style={styles.unitBox}>
-            <Text style={styles.unitText}>Meter</Text>
+            <Text style={styles.unitText}>m</Text>
           </View>
         </View>
-        <Text style={styles.helpText}>
-          Karyawan harus berada maksimal {radiusMeters || 0} meter dari titik koordinat di atas untuk absen Luring.
-        </Text>
-      </View>
-
-      <View style={styles.activePreviewBox}>
-        <Feather name="info" size={15} color={colors.masuk} style={{ marginRight: 6 }} />
-        <Text style={styles.activePreviewText}>
-          Koordinat Terpilih: {latitude}, {longitude} (Radius {radiusMeters}m)
-        </Text>
       </View>
 
       <Button
-        title={saving ? 'Menyimpan ke Database...' : 'Simpan Titik Absen ke Supabase'}
+        title={saving ? 'Menyimpan...' : 'Simpan'}
         variant="primary"
         icon="save"
         loading={saving}
@@ -187,23 +168,6 @@ export const GeofenceSettings: React.FC<GeofenceSettingsProps> = ({
 const styles = StyleSheet.create({
   mapPickerBox: {
     marginBottom: 16,
-  },
-  pickerGuideBanner: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    backgroundColor: colors.background,
-    paddingHorizontal: 10,
-    paddingVertical: 8,
-    borderRadius: radius.sm,
-    marginBottom: 8,
-    borderWidth: 1,
-    borderColor: colors.border,
-  },
-  pickerGuideText: {
-    fontSize: fontSize.xs,
-    fontWeight: '700',
-    color: colors.ink,
-    flex: 1,
   },
   formGroup: {
     marginBottom: 12,
@@ -249,25 +213,5 @@ const styles = StyleSheet.create({
     fontSize: fontSize.xs,
     fontWeight: '700',
     color: colors.ink,
-  },
-  helpText: {
-    fontSize: fontSize.xs,
-    color: colors.muted,
-    marginTop: 4,
-  },
-  activePreviewBox: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    backgroundColor: colors.masukSoft,
-    borderWidth: 1,
-    borderColor: colors.border,
-    padding: 10,
-    borderRadius: radius.sm,
-    marginBottom: 14,
-  },
-  activePreviewText: {
-    fontSize: fontSize.xs,
-    color: colors.masuk,
-    fontWeight: '700',
   },
 });

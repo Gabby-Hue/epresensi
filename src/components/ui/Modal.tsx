@@ -1,12 +1,12 @@
 import React from 'react';
 import {
   Modal as RNModal,
-  SafeAreaView,
   StyleSheet,
   Text,
   TouchableOpacity,
   View,
 } from 'react-native';
+import { SafeAreaView } from 'react-native-safe-area-context';
 import { Feather } from '@expo/vector-icons';
 import { colors, fontSize, radius, spacing } from '../../theme';
 

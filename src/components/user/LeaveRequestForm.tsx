@@ -3,7 +3,6 @@ import {
   Alert,
   KeyboardAvoidingView,
   Platform,
-  SafeAreaView,
   ScrollView,
   StyleSheet,
   Text,
@@ -78,7 +77,7 @@ export const LeaveRequestForm: React.FC<LeaveRequestFormProps> = ({ onSubmit, on
   };
 
   return (
-    <SafeAreaView style={styles.safeArea}>
+    <View style={styles.safeArea}>
       <KeyboardAvoidingView
         behavior={Platform.OS === 'ios' ? 'padding' : undefined}
         style={styles.flex}
@@ -311,7 +310,7 @@ export const LeaveRequestForm: React.FC<LeaveRequestFormProps> = ({ onSubmit, on
           </View>
         </ScrollView>
       </KeyboardAvoidingView>
-    </SafeAreaView>
+    </View>
   );
 };
 

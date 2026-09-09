@@ -1,13 +1,13 @@
 import React, { useEffect, useState } from 'react';
 import {
   Image,
-  SafeAreaView,
   ScrollView,
   StyleSheet,
   Text,
   TouchableOpacity,
   View,
 } from 'react-native';
+import { SafeAreaView } from 'react-native-safe-area-context';
 import { Feather } from '@expo/vector-icons';
 import { UserProfile } from '../../types/attendance';
 import { getDeviceInfo } from '../../services/deviceService';
@@ -19,15 +19,31 @@ interface ProfileScreenProps {
 }
 
 export const ProfileScreen: React.FC<ProfileScreenProps> = ({ user, onBack }) => {
-  const [deviceModel, setDeviceModel] = useState<string>(user.deviceModel || 'Memuat...');
-  const [deviceId, setDeviceId] = useState<string>(user.deviceId || 'Memuat...');
+  // Perangkat & departemen murni dari database.
+  // Nomor HP sudah dihapus sesuai permintaan — kartu pertama jadi Email.
+  const [deviceModel, setDeviceModel] = useState<string>(user.deviceModel || 'Belum terkunci');
+  const [deviceId, setDeviceId] = useState<string>(user.deviceId || '-');
+  const [deviceNote, setDeviceNote] = useState<string>(
+    user.deviceModel || user.deviceId ? 'Perangkat resmi — akun terkunci di HP ini.' : 'Belum ada perangkat terkunci.'
+  );
 
   useEffect(() => {
     let isMounted = true;
+    // Kalau DB sudah punya device, jangan timpa dengan info HP lain.
+    if (user.deviceModel || user.deviceId) {
+      setDeviceModel(user.deviceModel || '-');
+      setDeviceId(user.deviceId || '-');
+      setDeviceNote('Perangkat resmi — akun terkunci di HP ini.');
+      return () => {
+        isMounted = false;
+      };
+    }
+    // DB kosong (belum pernah kunci): tampilkan info HP saat ini sebagai preview
     getDeviceInfo().then((info) => {
       if (isMounted) {
-        setDeviceModel(user.deviceModel || info.modelName);
-        setDeviceId(user.deviceId || info.deviceId);
+        setDeviceModel(info.modelName);
+        setDeviceId(info.deviceId);
+        setDeviceNote('Belum terkunci — HP ini dikunci otomatis saat login berikutnya.');
       }
     });
     return () => {
@@ -35,8 +51,7 @@ export const ProfileScreen: React.FC<ProfileScreenProps> = ({ user, onBack }) =>
     };
   }, [user]);
 
-  const phoneNumberOrId = user.phoneNumber || '0084973597';
-  const departmentName = user.department || 'Rekayasa Perangkat Lunak';
+  const departmentName = user.department || 'General';
 
   const initials = user.fullName
     .split(' ')
@@ -46,7 +61,7 @@ export const ProfileScreen: React.FC<ProfileScreenProps> = ({ user, onBack }) =>
     .toUpperCase();
 
   return (
-    <SafeAreaView style={styles.container}>
+    <SafeAreaView style={styles.container} edges={['top', 'bottom', 'left', 'right']}>
       {/* Top Navbar Header — Mengikuti style Header dashboard */}
       <View style={styles.topNav}>
         <TouchableOpacity
@@ -92,14 +107,14 @@ export const ProfileScreen: React.FC<ProfileScreenProps> = ({ user, onBack }) =>
             </View>
           </View>
 
-          {/* Pill Card 1: ID / Nomor Handphone */}
+          {/* Pill Card 1: Email — dari database, bukan nomor dummy */}
           <View style={styles.pillCard}>
             <View style={styles.iconWrap}>
-              <Feather name="phone" size={20} color={colors.primary} />
+              <Feather name="mail" size={20} color={colors.primary} />
             </View>
             <View style={styles.pillTextWrap}>
-              <Text style={styles.pillLabel}>Nomor Identitas / HP</Text>
-              <Text style={styles.pillValue}>{phoneNumberOrId}</Text>
+              <Text style={styles.pillLabel}>Email</Text>
+              <Text style={styles.pillValue}>{user.email}</Text>
             </View>
           </View>
 
@@ -136,7 +151,7 @@ export const ProfileScreen: React.FC<ProfileScreenProps> = ({ user, onBack }) =>
             </View>
           </View>
 
-          {/* Pill Card 5: Merk & Tipe Handphone */}
+          {/* Pill Card 5: Model Perangkat — dari database + status kunci */}
           <View style={styles.pillCard}>
             <View style={styles.iconWrap}>
               <Feather name="smartphone" size={20} color={colors.primary} />
@@ -144,6 +159,7 @@ export const ProfileScreen: React.FC<ProfileScreenProps> = ({ user, onBack }) =>
             <View style={styles.pillTextWrap}>
               <Text style={styles.pillLabel}>Model Perangkat</Text>
               <Text style={styles.pillValue}>{deviceModel}</Text>
+              <Text style={styles.pillNote}>{deviceNote}</Text>
             </View>
           </View>
         </ScrollView>
@@ -315,5 +331,11 @@ const styles = StyleSheet.create({
     fontSize: fontSize.sm,
     fontWeight: '700',
     color: colors.ink,
+  },
+  pillNote: {
+    fontSize: fontSize.xs,
+    color: colors.muted,
+    marginTop: 4,
+    lineHeight: 18,
   },
 });

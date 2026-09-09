@@ -95,3 +95,27 @@ CREATE POLICY "Attendances update policy" ON public.attendances FOR UPDATE USING
 GRANT ALL ON TABLE public.profiles TO anon, authenticated, service_role;
 GRANT ALL ON TABLE public.office_settings TO anon, authenticated, service_role;
 GRANT ALL ON TABLE public.attendances TO anon, authenticated, service_role;
+
+-- ===================================================
+-- 4. Storage Buckets (foto presensi, dokumen izin, avatar)
+-- WAJIB dijalankan supaya upload foto tidak gagal "Bucket not found".
+-- ===================================================
+INSERT INTO storage.buckets (id, name, public)
+VALUES
+  ('attendance-photos', 'attendance-photos', true),
+  ('attendance-docs', 'attendance-docs', true),
+  ('avatars', 'avatars', true)
+ON CONFLICT (id) DO UPDATE SET public = EXCLUDED.public;
+
+-- Permissive Storage Policies (baca publik, upload/update/delete bebas)
+DROP POLICY IF EXISTS "Public read" ON storage.objects;
+CREATE POLICY "Public read" ON storage.objects FOR SELECT USING (true);
+
+DROP POLICY IF EXISTS "Allow upload" ON storage.objects;
+CREATE POLICY "Allow upload" ON storage.objects FOR INSERT WITH CHECK (true);
+
+DROP POLICY IF EXISTS "Allow update" ON storage.objects;
+CREATE POLICY "Allow update" ON storage.objects FOR UPDATE USING (true);
+
+DROP POLICY IF EXISTS "Allow delete" ON storage.objects;
+CREATE POLICY "Allow delete" ON storage.objects FOR DELETE USING (true);
