@@ -121,6 +121,7 @@ export const AttendanceFeed: React.FC<AttendanceFeedProps> = ({
                     hour: '2-digit',
                     minute: '2-digit',
                   })}
+                  {item.officeName ? ` • ${item.officeName}` : ''}
                 </Text>
               </View>
             </View>

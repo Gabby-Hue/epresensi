@@ -39,6 +39,7 @@ import { colors, fontSize, radius, spacing } from '../../theme';
 interface AttendanceHubProps {
   user: UserProfile;
   officeSettings: OfficeSettings;
+  officeList: OfficeSettings[];
   userTodayStatus: AttendanceRecord | null;
   userHistory: AttendanceRecord[];
   onClockIn: (data: {
@@ -47,6 +48,7 @@ interface AttendanceHubProps {
     latitude?: number;
     longitude?: number;
     distanceMeters?: number;
+    officeName?: string;
     reason?: string;
     startDate?: string;
     endDate?: string;
@@ -87,16 +89,19 @@ const formatLogTime = (iso: string): string =>
 export const AttendanceHub: React.FC<AttendanceHubProps> = ({
   user,
   officeSettings,
+  officeList,
   userTodayStatus,
   userHistory,
   onClockIn,
   onLogout,
 }) => {
+  const offices = officeList.length > 0 ? officeList : [officeSettings];
   const [currentPage, setCurrentPage] = useState<'dashboard' | 'leave_form'>('dashboard');
   const [mode, setMode] = useState<'masuk' | 'pulang'>('masuk');
   const [place, setPlace] = useState<'kantor' | 'rumah'>('kantor');
   const [currentDistance, setCurrentDistance] = useState<number | null>(null);
-  const [currentCoords, setCurrentCoords] = useState({ latitude: officeSettings.latitude, longitude: officeSettings.longitude });
+  const [nearestOffice, setNearestOffice] = useState<OfficeSettings>(offices[0]);
+  const [currentCoords, setCurrentCoords] = useState({ latitude: offices[0].latitude, longitude: offices[0].longitude });
   const [locLoading, setLocLoading] = useState(false);
   const [reason, setReason] = useState('');
   const [reasonTouched, setReasonTouched] = useState(false);
@@ -127,8 +132,10 @@ export const AttendanceHub: React.FC<AttendanceHubProps> = ({
   const toastSlide = useRef(new Animated.Value(-80)).current;
 
   useEffect(() => {
+    setNearestOffice(offices[0]);
     fetchLocation();
-  }, [officeSettings]);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [officeSettings.id, offices.length]);
 
   // Tampilkan toast tiap user belum absen hari ini (tutup otomatis / silang).
   useEffect(() => {
@@ -162,9 +169,18 @@ export const AttendanceHub: React.FC<AttendanceHubProps> = ({
     setGpsStale(false);
     const { coords, errorMsg } = await getCurrentLocation();
     setCurrentCoords(coords);
-    setCurrentDistance(
-      calculateDistanceMeters(coords.latitude, coords.longitude, officeSettings.latitude, officeSettings.longitude)
-    );
+    // Cari titik kantor terdekat dari posisi user
+    let best = offices[0];
+    let bestDist = calculateDistanceMeters(coords.latitude, coords.longitude, best.latitude, best.longitude);
+    for (const office of offices.slice(1)) {
+      const d = calculateDistanceMeters(coords.latitude, coords.longitude, office.latitude, office.longitude);
+      if (d < bestDist) {
+        best = office;
+        bestDist = d;
+      }
+    }
+    setNearestOffice(best);
+    setCurrentDistance(bestDist);
     if (errorMsg) {
       setLocError(errorMsg);
       setGpsStale(true);
@@ -172,12 +188,12 @@ export const AttendanceHub: React.FC<AttendanceHubProps> = ({
     setLocLoading(false);
   };
 
-  const isWithinRadius = !gpsStale && currentDistance !== null && currentDistance <= officeSettings.radiusMeters;
+  const isWithinRadius = !gpsStale && currentDistance !== null && currentDistance <= nearestOffice.radiusMeters;
   const blockReason =
     gpsStale || locError
       ? 'Lokasi belum valid. Nyalakan GPS dan tekan Cek ulang sampai jarak tampil.'
       : place === 'kantor' && currentDistance !== null && !isWithinRadius
-        ? `Anda ${formatDistance(currentDistance)} dari kantor, batas ${officeSettings.radiusMeters} m. Pilih Dari rumah atau mendekat dulu.`
+        ? `Anda ${formatDistance(currentDistance)} dari ${nearestOffice.officeName}, batas ${nearestOffice.radiusMeters} m. Pilih Dari rumah atau mendekat dulu.`
         : null;
   const firstName = user.fullName.split(' ')[0];
   const todayLabel = new Date().toLocaleDateString('id-ID', {
@@ -264,6 +280,7 @@ export const AttendanceHub: React.FC<AttendanceHubProps> = ({
           latitude: currentCoords.latitude,
           longitude: currentCoords.longitude,
           distanceMeters: currentDistance || 0,
+          officeName: place === 'kantor' ? nearestOffice.officeName : undefined,
           reason: place === 'rumah' ? reason : undefined,
           photoUrl: publicPhotoUrl,
         });
@@ -305,6 +322,7 @@ export const AttendanceHub: React.FC<AttendanceHubProps> = ({
           <Text style={styles.logSub}>
             {formatLogTime(item.clockInTime)} WIB
             {item.distanceMeters ? ` • ${item.distanceMeters} m` : ''}
+            {item.officeName ? ` • ${item.officeName}` : ''}
           </Text>
         </View>
         <Badge type={item.type} size="sm" />
@@ -523,11 +541,19 @@ export const AttendanceHub: React.FC<AttendanceHubProps> = ({
           <MapView
             userLat={currentCoords.latitude}
             userLng={currentCoords.longitude}
-            officeLat={officeSettings.latitude}
-            officeLng={officeSettings.longitude}
-            radiusMeters={officeSettings.radiusMeters}
+            officeLat={nearestOffice.latitude}
+            officeLng={nearestOffice.longitude}
+            radiusMeters={nearestOffice.radiusMeters}
+            offices={offices}
+            activeOfficeId={nearestOffice.id}
             height={200}
           />
+          <View style={styles.officeBadge}>
+            <Feather name="map-pin" size={16} color={colors.primary} style={{ marginRight: 6 }} />
+            <Text style={styles.officeBadgeText}>
+              {place === 'kantor' ? `Kantor terdekat: ${nearestOffice.officeName}` : 'Mode: dari rumah'}
+            </Text>
+          </View>
           <View style={styles.locRow}>
             <Text style={styles.locText}>
               {locLoading ? 'Mengukur jarak...' : gpsStale || currentDistance === null ? 'Jarak: belum valid' : `Jarak: ${formatDistance(currentDistance)}`}
@@ -597,7 +623,7 @@ export const AttendanceHub: React.FC<AttendanceHubProps> = ({
           setPendingLeaveData(null);
         }}
         onConfirmPhoto={handleConfirmPhotoSubmit}
-        attendanceTypeLabel={`${mode === 'masuk' ? 'Masuk' : 'Pulang'} (${place === 'kantor' ? 'Kantor' : 'Rumah'})`}
+        attendanceTypeLabel={`${mode === 'masuk' ? 'Masuk' : 'Pulang'} (${place === 'kantor' ? nearestOffice.officeName : 'Rumah'})`}
       />
 
       <ConfirmDialog
@@ -617,7 +643,7 @@ export const AttendanceHub: React.FC<AttendanceHubProps> = ({
         onClose={() => setShowBlockedDialog(false)}
         onConfirm={() => setShowBlockedDialog(false)}
         title="Di Luar Area Kantor"
-        message={blockedMessage || `Anda berada di luar radius kantor (batas ${officeSettings.radiusMeters} meter). Silakan mendekat ke area kantor untuk melakukan presensi.`}
+        message={blockedMessage || `Anda berada di luar radius kantor (batas ${nearestOffice.radiusMeters} meter). Silakan mendekat ke area ${nearestOffice.officeName} untuk melakukan presensi.`}
         confirmText="Kembali"
         icon="x"
         variant="danger"
@@ -636,6 +662,11 @@ export const AttendanceHub: React.FC<AttendanceHubProps> = ({
               <Text style={styles.infoText}>
                 {selectedLog.sessionType === 'pulang' ? 'Pulang' : 'Masuk'}: {formatLogTime(selectedLog.clockInTime)} WIB
               </Text>
+              {selectedLog.officeName ? (
+                <Text style={styles.infoText}>
+                  Kantor: {selectedLog.officeName}
+                </Text>
+              ) : null}
               {selectedLog.distanceMeters ? (
                 <Text style={styles.infoText}>
                   Jarak ke kantor: {selectedLog.distanceMeters} meter
@@ -873,6 +904,22 @@ const styles = StyleSheet.create({
     marginTop: 6,
   },
   // --- Lokasi + peta ---
+  officeBadge: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    backgroundColor: colors.primarySoft,
+    borderWidth: 1,
+    borderColor: colors.border,
+    borderRadius: radius.sm,
+    padding: spacing.sm,
+    marginTop: spacing.sm,
+  },
+  officeBadgeText: {
+    flex: 1,
+    fontSize: fontSize.sm,
+    fontWeight: '700',
+    color: colors.ink,
+  },
   locRow: {
     flexDirection: 'row',
     alignItems: 'center',

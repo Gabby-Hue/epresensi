@@ -56,6 +56,7 @@ export const AttendanceHistory: React.FC<AttendanceHistoryProps> = ({ history })
                     minute: '2-digit',
                   })}{' '}
                   WIB {record.distanceMeters ? `• ${record.distanceMeters}m` : ''}
+                  {record.officeName ? ` • ${record.officeName}` : ''}
                 </Text>
                 {record.reason && (
                   <Text style={styles.reasonText} numberOfLines={1}>
@@ -90,6 +91,11 @@ export const AttendanceHistory: React.FC<AttendanceHistoryProps> = ({ history })
               <Text style={styles.infoText}>
                 Waktu: {new Date(selectedItem.clockInTime).toLocaleTimeString('id-ID')} WIB
               </Text>
+              {selectedItem.officeName ? (
+                <Text style={styles.infoText}>
+                  Kantor: {selectedItem.officeName}
+                </Text>
+              ) : null}
               {selectedItem.distanceMeters ? (
                 <Text style={styles.infoText}>
                   Jarak ke kantor: {selectedItem.distanceMeters} meter

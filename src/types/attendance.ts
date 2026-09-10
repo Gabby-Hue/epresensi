@@ -41,6 +41,7 @@ export interface AttendanceRecord {
   latitude?: number;
   longitude?: number;
   distanceMeters?: number;
+  officeName?: string;
   reason?: string;
   startDate?: string;
   endDate?: string;

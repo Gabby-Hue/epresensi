@@ -39,6 +39,12 @@ export const LeaveDetailModal: React.FC<LeaveDetailModalProps> = ({
 
         <View style={styles.section}>
           <View style={styles.infoRow}>
+            <Feather name="map-pin" size={16} color={colors.muted} style={styles.infoIcon} />
+            <Text style={styles.infoValue}>
+              {record.officeName || (record.type === 'luring' ? 'Kantor' : record.type === 'daring' ? 'Rumah' : '-')}
+            </Text>
+          </View>
+          <View style={styles.infoRow}>
             <Feather name="calendar" size={16} color={colors.muted} style={styles.infoIcon} />
             <Text style={styles.infoValue}>
               {record.startDate && record.endDate && record.startDate !== record.endDate

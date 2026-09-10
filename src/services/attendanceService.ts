@@ -17,7 +17,20 @@ let currentOfficeSettings: OfficeSettings = {
   updatedAt: new Date().toISOString(),
 };
 
+let cachedOffices: OfficeSettings[] = [currentOfficeSettings];
+
 const FIXED_OFFICE_ID = '00000000-0000-0000-0000-000000000001';
+
+function mapOfficeRow(row: any): OfficeSettings {
+  return {
+    id: row.id,
+    officeName: row.office_name || 'Kantor',
+    latitude: Number(row.latitude),
+    longitude: Number(row.longitude),
+    radiusMeters: Number(row.radius_meters),
+    updatedAt: row.updated_at,
+  };
+}
 
 // Supabase Auth menolak email tanpa @/. — normalisasi input asal admin tetap terdaftar
 function isValidEmail(v: string): boolean {
@@ -257,21 +270,103 @@ export class AttendanceService {
   }
 
   static async getOfficeSettings(): Promise<OfficeSettings> {
+    const offices = await this.getOfficeList();
+    if (offices.length > 0) currentOfficeSettings = offices[0];
+    return currentOfficeSettings;
+  }
+
+  /** Semua titik kantor, urut dari yang paling baru. */
+  static async getOfficeList(): Promise<OfficeSettings[]> {
     try {
-      const { data, error } = await supabase.from('office_settings').select('*').order('updated_at', { ascending: false }).limit(1);
-      if (data && data.length > 0 && !error) {
-        const row = data[0];
-        currentOfficeSettings = {
-          id: row.id,
-          officeName: row.office_name || currentOfficeSettings.officeName,
-          latitude: Number(row.latitude),
-          longitude: Number(row.longitude),
-          radiusMeters: Number(row.radius_meters),
-          updatedAt: row.updated_at,
-        };
+      const { data, error } = await supabase.from('office_settings').select('*').order('updated_at', { ascending: false });
+      if (!error && data && data.length > 0) {
+        cachedOffices = data.map(mapOfficeRow);
+        currentOfficeSettings = cachedOffices[0];
       }
     } catch {}
-    return currentOfficeSettings;
+    return cachedOffices;
+  }
+
+  /** Tambah titik kantor baru (nama + koordinat + radius custom). */
+  static async addOffice(params: {
+    officeName: string;
+    latitude: number;
+    longitude: number;
+    radiusMeters: number;
+  }): Promise<{ success: boolean; message: string; office?: OfficeSettings }> {
+    const name = params.officeName.trim();
+    if (!name) return { success: false, message: 'Nama kantor tidak boleh kosong.' };
+    if (!isFinite(params.latitude) || !isFinite(params.longitude)) {
+      return { success: false, message: 'Koordinat tidak valid.' };
+    }
+    if (!Number.isInteger(params.radiusMeters) || params.radiusMeters <= 0) {
+      return { success: false, message: 'Radius harus bilangan bulat positif (meter).' };
+    }
+    try {
+      const { data, error } = await supabase
+        .from('office_settings')
+        .insert({
+          office_name: name,
+          latitude: params.latitude,
+          longitude: params.longitude,
+          radius_meters: params.radiusMeters,
+        } as any)
+        .select()
+        .single();
+      if (error) throw new Error(error.message);
+      const office = mapOfficeRow(data);
+      await this.getOfficeList();
+      return { success: true, message: `Titik ${name} berhasil ditambahkan.`, office };
+    } catch (e: any) {
+      return { success: false, message: e?.message || 'Gagal menambah titik kantor.' };
+    }
+  }
+
+  /** Ubah nama / titik / radius kantor tertentu. */
+  static async updateOffice(
+    id: string,
+    params: { officeName: string; latitude: number; longitude: number; radiusMeters: number }
+  ): Promise<{ success: boolean; message: string }> {
+    const name = params.officeName.trim();
+    if (!name) return { success: false, message: 'Nama kantor tidak boleh kosong.' };
+    if (!isFinite(params.latitude) || !isFinite(params.longitude)) {
+      return { success: false, message: 'Koordinat tidak valid.' };
+    }
+    if (!Number.isInteger(params.radiusMeters) || params.radiusMeters <= 0) {
+      return { success: false, message: 'Radius harus bilangan bulat positif (meter).' };
+    }
+    try {
+      const { error } = await supabase
+        .from('office_settings')
+        .update({
+          office_name: name,
+          latitude: params.latitude,
+          longitude: params.longitude,
+          radius_meters: params.radiusMeters,
+          updated_at: new Date().toISOString(),
+        } as any)
+        .eq('id', id);
+      if (error) throw new Error(error.message);
+      await this.getOfficeList();
+      return { success: true, message: `Titik ${name} berhasil diperbarui.` };
+    } catch (e: any) {
+      return { success: false, message: e?.message || 'Gagal memperbarui titik kantor.' };
+    }
+  }
+
+  /** Hapus titik kantor. Minimal 1 titik harus tersisa. */
+  static async deleteOffice(id: string): Promise<{ success: boolean; message: string }> {
+    if (cachedOffices.length <= 1) {
+      return { success: false, message: 'Minimal harus ada 1 titik kantor. Tambah dulu titik baru sebelum menghapus.' };
+    }
+    try {
+      const { error } = await supabase.from('office_settings').delete().eq('id', id);
+      if (error) throw new Error(error.message);
+      await this.getOfficeList();
+      return { success: true, message: 'Titik kantor dihapus.' };
+    } catch (e: any) {
+      return { success: false, message: e?.message || 'Gagal menghapus titik kantor.' };
+    }
   }
 
   static async updateOfficeSettings(newSettings: Partial<OfficeSettings>): Promise<OfficeSettings> {
@@ -288,6 +383,7 @@ export class AttendanceService {
         updated_at: currentOfficeSettings.updatedAt,
       } as any);
       currentOfficeSettings.id = targetId;
+      await this.getOfficeList();
     } catch {}
     return currentOfficeSettings;
   }
@@ -365,6 +461,7 @@ export class AttendanceService {
     latitude?: number;
     longitude?: number;
     distanceMeters?: number;
+    officeName?: string;
     reason?: string;
     startDate?: string;
     endDate?: string;
@@ -404,6 +501,7 @@ export class AttendanceService {
       latitude: params.latitude,
       longitude: params.longitude,
       distanceMeters: params.distanceMeters,
+      officeName: params.officeName,
       reason: params.reason,
       startDate: params.startDate || today,
       endDate: params.endDate || today,
@@ -427,6 +525,7 @@ export class AttendanceService {
           latitude: newRecord.latitude ?? null,
           longitude: newRecord.longitude ?? null,
           distance_meters: newRecord.distanceMeters ?? null,
+          office_name: newRecord.officeName ?? null,
           reason: newRecord.reason ?? null,
           start_date: newRecord.startDate,
           end_date: newRecord.endDate,
@@ -466,6 +565,7 @@ function mapAttendanceRow(item: any): AttendanceRecord {
     latitude: item.latitude,
     longitude: item.longitude,
     distanceMeters: item.distance_meters,
+    officeName: item.office_name ?? undefined,
     reason: item.reason,
     startDate: item.start_date,
     endDate: item.end_date,

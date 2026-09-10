@@ -1,13 +1,12 @@
 import React, { useState } from 'react';
 import {
-  Alert,
-  Platform,
   ScrollView,
   StyleSheet,
   Text,
   TouchableOpacity,
   View,
 } from 'react-native';
+import { AttendanceService } from '../../services/attendanceService';
 import { AttendanceRecord, OfficeSettings, UserProfile } from '../../types/attendance';
 import { Card } from '../ui/Card';
 import { Badge } from '../ui/Badge';
@@ -24,7 +23,9 @@ interface AdminDashboardProps {
   users: UserProfile[];
   todayAttendances: AttendanceRecord[];
   officeSettings: OfficeSettings;
+  officeList: OfficeSettings[];
   onUpdateOfficeSettings: (newSettings: Partial<OfficeSettings>) => Promise<void>;
+  onRefreshOffices: () => void;
   onRefreshUsers: () => void;
   onLogout: () => void;
 }
@@ -34,7 +35,9 @@ export const AdminDashboard: React.FC<AdminDashboardProps> = ({
   users,
   todayAttendances,
   officeSettings,
+  officeList,
   onUpdateOfficeSettings,
+  onRefreshOffices,
   onRefreshUsers,
   onLogout,
 }) => {
@@ -173,7 +176,30 @@ export const AdminDashboard: React.FC<AdminDashboardProps> = ({
         )}
 
         {activeTab === 'geofence' && (
-          <GeofenceSettings settings={officeSettings} onSave={onUpdateOfficeSettings} />
+          <GeofenceSettings
+            offices={officeList.length > 0 ? officeList : [officeSettings]}
+            onAdd={async (params) => {
+              const res = await AttendanceService.addOffice(params);
+              if (res.success) onRefreshOffices();
+              return { success: res.success, message: res.message };
+            }}
+            onUpdate={async (id, params) => {
+              const res = await AttendanceService.updateOffice(id, params);
+              if (res.success) {
+                onRefreshOffices();
+                await onUpdateOfficeSettings({});
+              }
+              return { success: res.success, message: res.message };
+            }}
+            onDelete={async (id) => {
+              const res = await AttendanceService.deleteOffice(id);
+              if (res.success) {
+                onRefreshOffices();
+                await onUpdateOfficeSettings({});
+              }
+              return { success: res.success, message: res.message };
+            }}
+          />
         )}
 
         {activeTab === 'employees' && (

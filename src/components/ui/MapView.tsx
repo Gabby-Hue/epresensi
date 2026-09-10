@@ -1,6 +1,7 @@
 import React, { useEffect } from 'react';
 import { Platform, StyleSheet, View } from 'react-native';
 import { WebView } from 'react-native-webview';
+import { OfficeSettings } from '../../types/attendance';
 
 interface MapViewProps {
   userLat: number;
@@ -8,6 +9,10 @@ interface MapViewProps {
   officeLat: number;
   officeLng: number;
   radiusMeters: number;
+  /** Semua titik kantor untuk digambar sekaligus (opsional, fallback ke 1 titik di atas). */
+  offices?: Pick<OfficeSettings, 'id' | 'officeName' | 'latitude' | 'longitude' | 'radiusMeters'>[];
+  /** Nama titik yang sedang aktif / terpilih (untuk highlight). */
+  activeOfficeId?: string | null;
   height?: number;
   interactivePicker?: boolean;
   onLocationSelect?: (lat: number, lng: number) => void;
@@ -19,6 +24,8 @@ export const MapView: React.FC<MapViewProps> = ({
   officeLat,
   officeLng,
   radiusMeters,
+  offices,
+  activeOfficeId,
   height = 220,
   interactivePicker = false,
   onLocationSelect,
@@ -44,6 +51,19 @@ export const MapView: React.FC<MapViewProps> = ({
     }
   }, [interactivePicker, onLocationSelect]);
 
+  const spots = (offices && offices.length > 0
+    ? offices
+    : [{ id: 'single', officeName: 'Titik Kantor', latitude: officeLat, longitude: officeLng, radiusMeters }]
+  ).map((o) => ({
+    id: String(o.id),
+    name: o.officeName.replace(/'/g, ''),
+    lat: Number(o.latitude),
+    lng: Number(o.longitude),
+    rad: Number(o.radiusMeters),
+  }));
+  const spotsJson = JSON.stringify(spots);
+  const activeIdJson = JSON.stringify(activeOfficeId ?? null);
+
   const htmlContent = `
     <!DOCTYPE html>
     <html>
@@ -55,6 +75,7 @@ export const MapView: React.FC<MapViewProps> = ({
           html, body, #map { height: 100%; width: 100%; margin: 0; padding: 0; background: #eaf2fb; }
           .user-icon { background: #2196F3; border: 2px solid white; border-radius: 50%; box-shadow: 0 0 8px rgba(33, 150, 243, 0.7); }
           .office-icon { background: #1565C0; border: 2px solid white; border-radius: 50%; box-shadow: 0 0 8px rgba(21, 101, 192, 0.7); }
+          .spot-icon { background: #7FB8EC; border: 2px solid white; border-radius: 50%; box-shadow: 0 0 6px rgba(33, 150, 243, 0.5); }
         </style>
       </head>
       <body>
@@ -65,6 +86,8 @@ export const MapView: React.FC<MapViewProps> = ({
           var uLat = Number(${userLat}) || oLat;
           var uLng = Number(${userLng}) || oLng;
           var rad = Number(${radiusMeters}) || 150;
+          var spots = ${spotsJson};
+          var activeId = ${activeIdJson};
 
           // Batasi zoom out minimal level 10 (area regional) agar tidak bisa ke skala benua/dunia
           var map = L.map('map', {
@@ -79,7 +102,7 @@ export const MapView: React.FC<MapViewProps> = ({
             attribution: 'OpenStreetMap'
           }).addTo(map);
 
-          // Geofence Circle
+          // Geofence Circle (titik utama / terpilih)
           var circle = L.circle([oLat, oLng], {
             color: '#2196F3',
             fillColor: '#2196F3',
@@ -87,9 +110,31 @@ export const MapView: React.FC<MapViewProps> = ({
             radius: rad
           }).addTo(map);
 
-          // Office Marker
+          // Office Marker (titik utama / terpilih)
           var officeIcon = L.divIcon({ className: 'office-icon', iconSize: [18, 18] });
           var officeMarker = L.marker([oLat, oLng], { icon: officeIcon }).addTo(map).bindPopup("<b>Titik Kantor</b>");
+
+          // Semua titik kantor: lingkaran + penanda + nama
+          try {
+            var spotIcon = function(isActive) {
+              return L.divIcon({
+                className: isActive ? 'office-icon' : 'spot-icon',
+                iconSize: [14, 14],
+              });
+            };
+            spots.forEach(function(s) {
+              var isActive = activeId && s.id === activeId;
+              L.circle([s.lat, s.lng], {
+                color: isActive ? '#EA580C' : '#2196F3',
+                fillColor: isActive ? '#EA580C' : '#2196F3',
+                fillOpacity: isActive ? 0.3 : 0.18,
+                radius: s.rad || rad,
+              }).addTo(map);
+              L.marker([s.lat, s.lng], { icon: spotIcon(isActive) })
+                .addTo(map)
+                .bindTooltip(s.name, { permanent: false, direction: 'top' });
+            });
+          } catch(e) {}
 
           // User Marker
           var userIcon = L.divIcon({ className: 'user-icon', iconSize: [18, 18] });
@@ -118,10 +163,11 @@ export const MapView: React.FC<MapViewProps> = ({
               : ''
           }
 
-          // Otomatis fokus ke kantor atau jika jarak user dekat fokus mencakup keduanya
+          // Otomatis fokus: mencakup user + semua titik kantor
           try {
-            var group = new L.featureGroup([officeMarker, userMarker]);
-            map.fitBounds(group.getBounds().pad(0.3), { maxZoom: 17 });
+            var bounds = [[uLat, uLng], [oLat, oLng]];
+            spots.forEach(function(s) { bounds.push([s.lat, s.lng]); });
+            map.fitBounds(bounds, { padding: [30, 30], maxZoom: 17 });
           } catch(e) {
             map.setView([oLat, oLng], 16);
           }

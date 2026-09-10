@@ -25,6 +25,7 @@ import { ProfileScreen } from './src/components/user/ProfileScreen';
 function AppContent() {
   const [currentUser, setCurrentUser] = useState<UserProfile | null>(null);
   const [officeSettings, setOfficeSettings] = useState<OfficeSettings | null>(null);
+  const [officeList, setOfficeList] = useState<OfficeSettings[]>([]);
   const [allUsers, setAllUsers] = useState<UserProfile[]>([]);
   const [todayAttendances, setTodayAttendances] = useState<AttendanceRecord[]>([]);
   const [userHistory, setUserHistory] = useState<AttendanceRecord[]>([]);
@@ -74,7 +75,9 @@ function AppContent() {
   };
 
   const loadDataForRole = async () => {
-    const settings = await AttendanceService.getOfficeSettings();
+    const offices = await AttendanceService.getOfficeList();
+    setOfficeList(offices);
+    const settings = offices.length > 0 ? offices[0] : await AttendanceService.getOfficeSettings();
     setOfficeSettings(settings);
 
     if (currentUser) {
@@ -90,6 +93,12 @@ function AppContent() {
         setTodayAttendances(attendances);
       }
     }
+  };
+
+  const handleRefreshOffices = async () => {
+    const offices = await AttendanceService.getOfficeList();
+    setOfficeList(offices);
+    if (offices.length > 0) setOfficeSettings({ ...offices[0] });
   };
 
   const handleLogout = async () => {
@@ -112,6 +121,7 @@ function AppContent() {
     latitude?: number;
     longitude?: number;
     distanceMeters?: number;
+    officeName?: string;
     reason?: string;
     startDate?: string;
     endDate?: string;
@@ -176,7 +186,9 @@ function AppContent() {
                 radiusMeters: 150,
                 updatedAt: new Date().toISOString(),
               }}
+              officeList={officeList}
               onUpdateOfficeSettings={handleUpdateOfficeSettings}
+              onRefreshOffices={handleRefreshOffices}
               onRefreshUsers={loadDataForRole}
               onLogout={handleLogout}
             />
@@ -191,6 +203,7 @@ function AppContent() {
                 radiusMeters: 150,
                 updatedAt: new Date().toISOString(),
               }}
+              officeList={officeList}
               userTodayStatus={userTodayStatus}
               userHistory={userHistory}
               onClockIn={handleUserClockIn}
