@@ -12,6 +12,7 @@ import { Feather } from '@expo/vector-icons';
 import { AttendanceRecord, UserProfile } from '../../types/attendance';
 import { AttendanceService } from '../../services/attendanceService';
 import { MonthAttendanceCalendar, buildAttendanceMap, getDayStatus } from '../user/MonthAttendanceCalendar';
+import { isWeekendDateString } from '../../utils/dates';
 import { Badge } from '../ui/Badge';
 import { colors, fontSize, radius, spacing } from '../../theme';
 
@@ -174,7 +175,13 @@ export const AdminEmployeeRecap: React.FC<AdminEmployeeRecapProps> = ({
                         )}
                         <View style={{ flex: 1 }}>
                           <Text style={styles.logTitle}>
-                            {r.sessionType === 'pulang' ? 'Pulang' : r.sessionType === 'izin_sakit' ? 'Izin/Sakit' : 'Masuk'} • {formatTime(r.clockInTime)} WIB
+                            {r.sessionType === 'izin_sakit'
+                              ? 'Izin/Sakit'
+                              : isWeekendDateString(r.date)
+                                ? 'Lembur'
+                                : r.sessionType === 'pulang'
+                                  ? 'Pulang'
+                                  : 'Masuk'} • {formatTime(r.clockInTime)} WIB
                           </Text>
                           <Text style={styles.logSub}>
                             {r.officeName ? (

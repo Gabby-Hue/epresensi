@@ -35,6 +35,7 @@ import { LeaveRequestForm } from './LeaveRequestForm';
 import { MonthAttendanceCalendar } from './MonthAttendanceCalendar';
 import { StorageService } from '../../services/storageService';
 import { succeed, fail, select } from '../../services/feedbackService';
+import { isWeekendDateString } from '../../utils/dates';
 import { Feather } from '@expo/vector-icons';
 import { colors, fontSize, radius, spacing } from '../../theme';
 
@@ -313,6 +314,9 @@ export const AttendanceHub: React.FC<AttendanceHubProps> = ({
 
   const renderLogRow = (item: AttendanceRecord) => {
     const isMasuk = item.sessionType === 'masuk';
+    // Absen di Sabtu/Minggu = lembur (override tanggal merah)
+    const isLembur =
+      isWeekendDateString(item.date) && (item.sessionType === 'masuk' || item.sessionType === 'pulang');
     return (
       <TouchableOpacity
         key={item.id}
@@ -329,7 +333,7 @@ export const AttendanceHub: React.FC<AttendanceHubProps> = ({
         )}
         <View style={styles.logInfo}>
           <Text style={styles.logTitle}>
-            {isMasuk ? 'Masuk' : 'Pulang'}
+            {isLembur ? 'Lembur' : isMasuk ? 'Masuk' : 'Pulang'}
             {' • '}
             {formatLogDate(item.clockInTime)}
           </Text>
@@ -742,7 +746,14 @@ export const AttendanceHub: React.FC<AttendanceHubProps> = ({
             </View>
             <View style={styles.infoBox}>
               <Text style={styles.infoText}>
-                {selectedLog.sessionType === 'pulang' ? 'Pulang' : 'Masuk'}: {formatLogTime(selectedLog.clockInTime)} WIB
+                {selectedLog.sessionType === 'izin_sakit'
+                  ? 'Izin/Sakit'
+                  : isWeekendDateString(selectedLog.date)
+                    ? `Lembur (${selectedLog.sessionType === 'pulang' ? 'pulang' : 'masuk'})`
+                    : selectedLog.sessionType === 'pulang'
+                      ? 'Pulang'
+                      : 'Masuk'}
+                : {formatLogTime(selectedLog.clockInTime)} WIB
               </Text>
               {selectedLog.officeName ? (
                 <Text style={styles.infoText}>
