@@ -9,8 +9,8 @@ export const colors = {
   ink: '#0C1B2A',
   muted: '#526277',
   faint: '#8AA0B4',
-  border: '#DFE9F4',
-  borderStrong: '#C3D4E3',
+  border: '#E4EBF3',
+  borderStrong: '#CBD8E4',
   primary: '#2196F3',
   primaryDark: '#1976D2',
   primarySoft: '#E3F2FD',
@@ -29,7 +29,7 @@ export const colors = {
 
 export const fontSize = { xs: 14, sm: 16, md: 18, lg: 21, xl: 25, xxl: 32 } as const;
 export const spacing = { xs: 8, sm: 12, md: 16, lg: 20, xl: 24, xxl: 32 } as const;
-export const radius = { sm: 6, md: 10, lg: 12 } as const;
+export const radius = { sm: 8, md: 12, lg: 18 } as const;
 export const touch = { buttonMinHeight: 56, inputMinHeight: 56 } as const;
 
 // Warna per sesi absen: datang = biru langit, pulang = oranye, izin = merah.

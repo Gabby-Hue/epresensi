@@ -14,17 +14,20 @@ import { Button } from '../ui/Button';
 import { Modal } from '../ui/Modal';
 import { Feather } from '@expo/vector-icons';
 import { colors, fontSize, radius } from '../../theme';
+import { select } from '../../services/feedbackService';
 
 interface AdminEmployeeManagerProps {
   currentAdmin: UserProfile;
   users: UserProfile[];
   onChanged: () => void;
+  onSelectEmployee?: (u: UserProfile) => void;
 }
 
 export const AdminEmployeeManager: React.FC<AdminEmployeeManagerProps> = ({
   currentAdmin,
   users,
   onChanged,
+  onSelectEmployee,
 }) => {
   const [fullName, setFullName] = useState('');
   const [email, setEmail] = useState('');
@@ -244,6 +247,16 @@ export const AdminEmployeeManager: React.FC<AdminEmployeeManagerProps> = ({
                 </Text>
               </View>
               <TouchableOpacity
+                onPress={() => {
+                  select();
+                  onSelectEmployee?.(item);
+                }}
+                style={styles.iconBtn}
+                hitSlop={12}
+              >
+                <Feather name="calendar" size={18} color={colors.primary} />
+              </TouchableOpacity>
+              <TouchableOpacity
                 onPress={() => handleResetDevice(item)}
                 style={styles.iconBtn}
                 hitSlop={12}
@@ -268,14 +281,22 @@ export const AdminEmployeeManager: React.FC<AdminEmployeeManagerProps> = ({
 
       <Card
         title={`Semua karyawan (${employees.length})`}
-        subtitle="Termasuk akun dari admin lain"
+        subtitle="Termasuk akun dari admin lain — ketuk untuk lihat rekap tanggalan"
         icon="users"
       >
         {employees.length === 0 ? (
           <Text style={styles.emptyText}>Belum ada akun karyawan.</Text>
         ) : (
           employees.map((item) => (
-            <View key={item.id} style={styles.userRow}>
+            <TouchableOpacity
+              key={item.id}
+              activeOpacity={0.7}
+              onPress={() => {
+                select();
+                onSelectEmployee?.(item);
+              }}
+              style={styles.userRow}
+            >
               <View style={styles.avatar}>
                 <Text style={styles.avatarText}>
                   {item.fullName.substring(0, 2).toUpperCase()}
@@ -288,7 +309,8 @@ export const AdminEmployeeManager: React.FC<AdminEmployeeManagerProps> = ({
               <View style={styles.deptBadge}>
                 <Text style={styles.deptText}>{item.department || 'Staff'}</Text>
               </View>
-            </View>
+              <Feather name="chevron-right" size={18} color={colors.faint} style={{ marginLeft: 8 }} />
+            </TouchableOpacity>
           ))
         )}
       </Card>

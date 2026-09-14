@@ -6,6 +6,7 @@ export const INITIAL_OFFICE_SETTINGS: OfficeSettings = {
   latitude: -6.2088,
   longitude: 106.8456,
   radiusMeters: 150,
+  color: '#2196F3',
   updatedAt: new Date().toISOString(),
 };
 

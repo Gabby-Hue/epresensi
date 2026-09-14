@@ -1,9 +1,11 @@
 import React, { useEffect, useState } from 'react';
 import {
   ActivityIndicator,
+  Platform,
   StatusBar,
   StyleSheet,
   View,
+  useWindowDimensions,
 } from 'react-native';
 import { SafeAreaProvider, SafeAreaView } from 'react-native-safe-area-context';
 import {
@@ -14,6 +16,7 @@ import {
   UserProfile,
 } from './src/types/attendance';
 import { AttendanceService } from './src/services/attendanceService';
+import { initFeedback } from './src/services/feedbackService';
 import { supabase } from './src/lib/supabase';
 import { Header } from './src/components/ui/Header';
 import { colors } from './src/theme';
@@ -28,14 +31,20 @@ function AppContent() {
   const [officeList, setOfficeList] = useState<OfficeSettings[]>([]);
   const [allUsers, setAllUsers] = useState<UserProfile[]>([]);
   const [todayAttendances, setTodayAttendances] = useState<AttendanceRecord[]>([]);
+  const [pendingApprovals, setPendingApprovals] = useState<AttendanceRecord[]>([]);
   const [userHistory, setUserHistory] = useState<AttendanceRecord[]>([]);
   const [userTodayStatus, setUserTodayStatus] = useState<AttendanceRecord | null>(null);
   const [loading, setLoading] = useState(true);
   const [showProfilePage, setShowProfilePage] = useState(false);
+  const { width } = useWindowDimensions();
+  // Di dashboard web admin sudah ada sidebar + topbar sendiri — header aplikasi disembunyikan
+  const hideHeaderForWideAdmin =
+    !!currentUser && currentUser.role === 'admin' && Platform.OS === 'web' && width >= 768;
 
   // Initialize Supabase Auth Session Listener
   useEffect(() => {
     checkCurrentSession();
+    void initFeedback();
 
     const { data: authListener } = supabase.auth.onAuthStateChange(async (event, session) => {
       if (session?.user) {
@@ -89,8 +98,10 @@ function AppContent() {
       if (currentUser.role === 'admin') {
         const users = await AttendanceService.getAllUsers();
         const attendances = await AttendanceService.getTodayAttendances();
+        const pending = await AttendanceService.getPendingApprovals();
         setAllUsers(users);
         setTodayAttendances(attendances);
+        setPendingApprovals(pending);
       }
     }
   };
@@ -122,6 +133,7 @@ function AppContent() {
     longitude?: number;
     distanceMeters?: number;
     officeName?: string;
+    officeColor?: string;
     reason?: string;
     startDate?: string;
     endDate?: string;
@@ -165,11 +177,13 @@ function AppContent() {
     <SafeAreaView style={styles.container} edges={['top', 'bottom', 'left', 'right']}>
       <StatusBar barStyle="dark-content" backgroundColor="#FFFFFF" />
 
-        {/* Header */}
-        <Header
-          user={currentUser}
-          onPressProfile={() => setShowProfilePage(true)}
-        />
+        {/* Header (disembunyikan di dashboard web admin) */}
+        {!hideHeaderForWideAdmin && (
+          <Header
+            user={currentUser}
+            onPressProfile={() => setShowProfilePage(true)}
+          />
+        )}
 
         {/* Main View */}
         <View style={styles.content}>
@@ -178,12 +192,14 @@ function AppContent() {
               currentAdmin={currentUser}
               users={allUsers}
               todayAttendances={todayAttendances}
+              pendingApprovals={pendingApprovals}
               officeSettings={officeSettings || {
                 id: '1',
                 officeName: 'Kantor Utama',
                 latitude: -6.2088,
                 longitude: 106.8456,
                 radiusMeters: 150,
+                color: '#2196F3',
                 updatedAt: new Date().toISOString(),
               }}
               officeList={officeList}
@@ -191,6 +207,7 @@ function AppContent() {
               onRefreshOffices={handleRefreshOffices}
               onRefreshUsers={loadDataForRole}
               onLogout={handleLogout}
+              onPressProfile={() => setShowProfilePage(true)}
             />
           ) : (
             <AttendanceHub
@@ -201,6 +218,7 @@ function AppContent() {
                 latitude: -6.2088,
                 longitude: 106.8456,
                 radiusMeters: 150,
+                color: '#2196F3',
                 updatedAt: new Date().toISOString(),
               }}
               officeList={officeList}

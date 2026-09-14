@@ -121,13 +121,25 @@ export const AttendanceFeed: React.FC<AttendanceFeedProps> = ({
                     hour: '2-digit',
                     minute: '2-digit',
                   })}
-                  {item.officeName ? ` • ${item.officeName}` : ''}
+                  {item.officeName ? (
+                    <>
+                      {' • '}
+                      {item.officeColor ? <Text style={{ color: item.officeColor }}>● </Text> : null}
+                      {item.officeName}
+                    </>
+                  ) : ''}
                 </Text>
               </View>
             </View>
 
             <View style={styles.itemRight}>
-              <Badge type={item.type} size="sm" />
+              {item.type === 'izin_sakit' && item.approvalStatus === 'pending' ? (
+                <Badge type="menunggu" size="sm" />
+              ) : item.type === 'izin_sakit' && item.approvalStatus === 'rejected' ? (
+                <Badge type="ditolak" size="sm" />
+              ) : (
+                <Badge type={item.type} size="sm" />
+              )}
               <Feather name="chevron-right" size={16} color={colors.faint} style={{ marginTop: 4 }} />
             </View>
           </TouchableOpacity>

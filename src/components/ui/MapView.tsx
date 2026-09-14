@@ -10,9 +10,11 @@ interface MapViewProps {
   officeLng: number;
   radiusMeters: number;
   /** Semua titik kantor untuk digambar sekaligus (opsional, fallback ke 1 titik di atas). */
-  offices?: Pick<OfficeSettings, 'id' | 'officeName' | 'latitude' | 'longitude' | 'radiusMeters'>[];
+  offices?: Pick<OfficeSettings, 'id' | 'officeName' | 'latitude' | 'longitude' | 'radiusMeters' | 'color'>[];
   /** Nama titik yang sedang aktif / terpilih (untuk highlight). */
   activeOfficeId?: string | null;
+  /** Warna lingkaran + penanda utama (default biru). */
+  mainColor?: string;
   height?: number;
   interactivePicker?: boolean;
   onLocationSelect?: (lat: number, lng: number) => void;
@@ -26,6 +28,7 @@ export const MapView: React.FC<MapViewProps> = ({
   radiusMeters,
   offices,
   activeOfficeId,
+  mainColor,
   height = 220,
   interactivePicker = false,
   onLocationSelect,
@@ -60,9 +63,11 @@ export const MapView: React.FC<MapViewProps> = ({
     lat: Number(o.latitude),
     lng: Number(o.longitude),
     rad: Number(o.radiusMeters),
+    color: /^#[0-9a-fA-F]{6}$/.test((o as any).color || '') ? (o as any).color : '#2196F3',
   }));
   const spotsJson = JSON.stringify(spots);
   const activeIdJson = JSON.stringify(activeOfficeId ?? null);
+  const main = /^#[0-9a-fA-F]{6}$/.test(mainColor || '') ? mainColor as string : '#2196F3';
 
   const htmlContent = `
     <!DOCTYPE html>
@@ -88,6 +93,7 @@ export const MapView: React.FC<MapViewProps> = ({
           var rad = Number(${radiusMeters}) || 150;
           var spots = ${spotsJson};
           var activeId = ${activeIdJson};
+          var mainC = '${main}';
 
           // Batasi zoom out minimal level 10 (area regional) agar tidak bisa ke skala benua/dunia
           var map = L.map('map', {
@@ -104,33 +110,42 @@ export const MapView: React.FC<MapViewProps> = ({
 
           // Geofence Circle (titik utama / terpilih)
           var circle = L.circle([oLat, oLng], {
-            color: '#2196F3',
-            fillColor: '#2196F3',
+            color: mainC,
+            fillColor: mainC,
             fillOpacity: 0.25,
             radius: rad
           }).addTo(map);
 
           // Office Marker (titik utama / terpilih)
-          var officeIcon = L.divIcon({ className: 'office-icon', iconSize: [18, 18] });
+          var officeIcon = L.divIcon({ className: 'office-icon', html: '<div style="width:18px;height:18px;border-radius:50%;background:' + mainC + ';border:2px solid white;box-shadow:0 0 8px rgba(0,0,0,0.5);"></div>', iconSize: [18, 18] });
           var officeMarker = L.marker([oLat, oLng], { icon: officeIcon }).addTo(map).bindPopup("<b>Titik Kantor</b>");
 
-          // Semua titik kantor: lingkaran + penanda + nama
+          // Semua titik kantor: lingkaran + penanda + nama (warna ikut tiap titik)
           try {
-            var spotIcon = function(isActive) {
+            var spotIcon = function(isActive, color) {
+              var c = (/^#[0-9a-fA-F]{6}$/.test(color || '') ? color : '#2196F3');
+              if (isActive) {
+                return L.divIcon({
+                  className: 'office-icon',
+                  iconSize: [14, 14],
+                });
+              }
               return L.divIcon({
-                className: isActive ? 'office-icon' : 'spot-icon',
+                className: 'spot-icon',
+                html: '<div style=\"width:14px;height:14px;border-radius:50%;background:' + c + ';border:2px solid white;box-shadow:0 0 6px rgba(0,0,0,0.4);\"></div>',
                 iconSize: [14, 14],
               });
             };
             spots.forEach(function(s) {
               var isActive = activeId && s.id === activeId;
+              var sc = (/^#[0-9a-fA-F]{6}$/.test(s.color || '') ? s.color : '#2196F3');
               L.circle([s.lat, s.lng], {
-                color: isActive ? '#EA580C' : '#2196F3',
-                fillColor: isActive ? '#EA580C' : '#2196F3',
+                color: isActive ? '#EA580C' : sc,
+                fillColor: isActive ? '#EA580C' : sc,
                 fillOpacity: isActive ? 0.3 : 0.18,
                 radius: s.rad || rad,
               }).addTo(map);
-              L.marker([s.lat, s.lng], { icon: spotIcon(isActive) })
+              L.marker([s.lat, s.lng], { icon: spotIcon(isActive, sc) })
                 .addTo(map)
                 .bindTooltip(s.name, { permanent: false, direction: 'top' });
             });

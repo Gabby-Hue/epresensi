@@ -10,6 +10,7 @@ import {
 } from 'react-native';
 import { Feather } from '@expo/vector-icons';
 import { colors, fontSize, radius, touch } from '../../theme';
+import { tap } from '../../services/feedbackService';
 
 interface ButtonProps extends TouchableOpacityProps {
   title: string;
@@ -53,6 +54,10 @@ export const Button: React.FC<ButtonProps> = ({
         style,
       ]}
       {...props}
+      onPress={(e) => {
+        tap();
+        props.onPress?.(e);
+      }}
     >
       {loading ? (
         <ActivityIndicator color={textColor || palette.text} size="small" />

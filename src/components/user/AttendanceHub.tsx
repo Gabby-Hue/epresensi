@@ -32,7 +32,9 @@ import { Card } from '../ui/Card';
 import { Badge } from '../ui/Badge';
 import { CameraModal } from './CameraModal';
 import { LeaveRequestForm } from './LeaveRequestForm';
+import { MonthAttendanceCalendar } from './MonthAttendanceCalendar';
 import { StorageService } from '../../services/storageService';
+import { succeed, fail, select } from '../../services/feedbackService';
 import { Feather } from '@expo/vector-icons';
 import { colors, fontSize, radius, spacing } from '../../theme';
 
@@ -49,6 +51,7 @@ interface AttendanceHubProps {
     longitude?: number;
     distanceMeters?: number;
     officeName?: string;
+    officeColor?: string;
     reason?: string;
     startDate?: string;
     endDate?: string;
@@ -123,6 +126,9 @@ export const AttendanceHub: React.FC<AttendanceHubProps> = ({
   const [blockedMessage, setBlockedMessage] = useState('');
   const [showLogoutDialog, setShowLogoutDialog] = useState(false);
   const [selectedLog, setSelectedLog] = useState<AttendanceRecord | null>(null);
+  const [calYear, setCalYear] = useState(() => new Date().getFullYear());
+  const [calMonth, setCalMonth] = useState(() => new Date().getMonth());
+  const [calDay, setCalDay] = useState<number | null>(null);
 
   const [showScrollTop, setShowScrollTop] = useState(false);
 
@@ -281,14 +287,22 @@ export const AttendanceHub: React.FC<AttendanceHubProps> = ({
           longitude: currentCoords.longitude,
           distanceMeters: currentDistance || 0,
           officeName: place === 'kantor' ? nearestOffice.officeName : undefined,
+          officeColor: place === 'kantor' ? nearestOffice.color : undefined,
           reason: place === 'rumah' ? reason : undefined,
           photoUrl: publicPhotoUrl,
         });
         setReason('');
       }
       setLastSavedAt(new Date().toISOString());
-      Alert.alert('Berhasil', 'Absensi Anda sudah tersimpan di Supabase (foto, tanggal, jam, nama).');
+      succeed();
+      Alert.alert(
+        'Berhasil',
+        pendingLeaveData
+          ? 'Pengajuan dikirim dan menunggu persetujuan admin.'
+          : 'Absensi Anda sudah tersimpan di Supabase (foto, tanggal, jam, nama).'
+      );
     } catch (e: any) {
+      fail();
       Alert.alert('Gagal menyimpan', e?.message || 'Upload foto atau simpan absen gagal. Coba lagi.');
     } finally {
       setSubmitting(false);
@@ -322,10 +336,22 @@ export const AttendanceHub: React.FC<AttendanceHubProps> = ({
           <Text style={styles.logSub}>
             {formatLogTime(item.clockInTime)} WIB
             {item.distanceMeters ? ` • ${item.distanceMeters} m` : ''}
-            {item.officeName ? ` • ${item.officeName}` : ''}
+            {item.officeName ? (
+              <>
+                {' • '}
+                {item.officeColor ? <Text style={{ color: item.officeColor }}>● </Text> : null}
+                {item.officeName}
+              </>
+            ) : ''}
           </Text>
         </View>
-        <Badge type={item.type} size="sm" />
+        {item.type === 'izin_sakit' && item.approvalStatus === 'pending' ? (
+          <Badge type="menunggu" size="sm" />
+        ) : item.type === 'izin_sakit' && item.approvalStatus === 'rejected' ? (
+          <Badge type="ditolak" size="sm" />
+        ) : (
+          <Badge type={item.type} size="sm" />
+        )}
       </TouchableOpacity>
     );
   };
@@ -422,7 +448,10 @@ export const AttendanceHub: React.FC<AttendanceHubProps> = ({
         <View style={styles.duoRow}>
           <TouchableOpacity
             activeOpacity={0.85}
-            onPress={() => setMode('masuk')}
+            onPress={() => {
+              select();
+              setMode('masuk');
+            }}
             style={[
               styles.actionBtn,
               mode === 'masuk' && { backgroundColor: colors.masuk, borderColor: colors.masuk },
@@ -436,7 +465,10 @@ export const AttendanceHub: React.FC<AttendanceHubProps> = ({
           </TouchableOpacity>
           <TouchableOpacity
             activeOpacity={0.85}
-            onPress={() => setMode('pulang')}
+            onPress={() => {
+              select();
+              setMode('pulang');
+            }}
             style={[
               styles.actionBtn,
               mode === 'pulang' && { backgroundColor: colors.pulang, borderColor: colors.pulang },
@@ -481,7 +513,10 @@ export const AttendanceHub: React.FC<AttendanceHubProps> = ({
         <View style={styles.duoRow}>
           <TouchableOpacity
             activeOpacity={0.85}
-            onPress={() => setPlace('kantor')}
+            onPress={() => {
+              select();
+              setPlace('kantor');
+            }}
             style={[styles.placeBtn, place === 'kantor' && styles.placeBtnActive]}
           >
             <Feather name="briefcase" size={22} color={place === 'kantor' ? '#FFFFFF' : colors.primary} />
@@ -489,7 +524,10 @@ export const AttendanceHub: React.FC<AttendanceHubProps> = ({
           </TouchableOpacity>
           <TouchableOpacity
             activeOpacity={0.85}
-            onPress={() => setPlace('rumah')}
+            onPress={() => {
+              select();
+              setPlace('rumah');
+            }}
             style={[styles.placeBtn, place === 'rumah' && styles.placeBtnActive]}
           >
             <Feather name="home" size={22} color={place === 'rumah' ? '#FFFFFF' : colors.primary} />
@@ -546,12 +584,20 @@ export const AttendanceHub: React.FC<AttendanceHubProps> = ({
             radiusMeters={nearestOffice.radiusMeters}
             offices={offices}
             activeOfficeId={nearestOffice.id}
+            mainColor={nearestOffice.color}
             height={200}
           />
           <View style={styles.officeBadge}>
             <Feather name="map-pin" size={16} color={colors.primary} style={{ marginRight: 6 }} />
             <Text style={styles.officeBadgeText}>
-              {place === 'kantor' ? `Kantor terdekat: ${nearestOffice.officeName}` : 'Mode: dari rumah'}
+              {place === 'kantor' ? (
+                <>
+                  <Text style={{ color: nearestOffice.color }}>● </Text>
+                  Kantor terdekat: {nearestOffice.officeName}
+                </>
+              ) : (
+                'Mode: dari rumah'
+              )}
             </Text>
           </View>
           <View style={styles.locRow}>
@@ -585,10 +631,40 @@ export const AttendanceHub: React.FC<AttendanceHubProps> = ({
           {weekLogs.length === 0 ? renderEmptyLogs() : weekLogs.map(renderLogRow)}
         </Card>
 
-        {/* 5. Logs Absensi Bulan Ini — masuk & pulang + foto bukti */}
+        {/* 5. Kalender Absensi Bulan Ini — abu = alpa, kuning = 1 sesi, biru = lengkap, merah hollow = izin, merah solid = libur */}
         <Text style={styles.sectionTitle}>Absensi Bulan Ini</Text>
         <Card style={styles.logCard}>
-          {monthLogs.length === 0 ? renderEmptyLogs() : monthLogs.map(renderLogRow)}
+          <MonthAttendanceCalendar
+            attendances={userHistory}
+            year={calYear}
+            month={calMonth}
+            onMonthChange={(y, m) => {
+              setCalYear(y);
+              setCalMonth(m);
+              setCalDay(null);
+            }}
+            selectedDay={calDay}
+            onSelectDay={(d) => setCalDay((prev) => (prev === d ? null : d))}
+          />
+          {calDay !== null && (
+            <View style={styles.calDetailBox}>
+              <Text style={styles.calDetailTitle}>
+                {calDay}{' '}
+                {new Date(calYear, calMonth, 1).toLocaleDateString('id-ID', {
+                  month: 'long',
+                  year: 'numeric',
+                })}
+              </Text>
+              {(() => {
+                const key = `${calYear}-${String(calMonth + 1).padStart(2, '0')}-${String(calDay).padStart(2, '0')}`;
+                const dayLogs = userHistory.filter((r) => r.date === key);
+                if (dayLogs.length === 0) {
+                  return <Text style={styles.calDetailEmpty}>Tidak ada absen di tanggal ini.</Text>;
+                }
+                return dayLogs.map(renderLogRow);
+              })()}
+            </View>
+          )}
         </Card>
       </ScrollView>
 
@@ -655,7 +731,13 @@ export const AttendanceHub: React.FC<AttendanceHubProps> = ({
         {selectedLog && (
           <View>
             <View style={styles.modalHeaderRow}>
-              <Badge type={selectedLog.type} />
+              {selectedLog.type === 'izin_sakit' && selectedLog.approvalStatus === 'pending' ? (
+                <Badge type="menunggu" />
+              ) : selectedLog.type === 'izin_sakit' && selectedLog.approvalStatus === 'rejected' ? (
+                <Badge type="ditolak" />
+              ) : (
+                <Badge type={selectedLog.type} />
+              )}
               <Text style={styles.modalDate}>{formatLogDate(selectedLog.clockInTime)}</Text>
             </View>
             <View style={styles.infoBox}>
@@ -1098,6 +1180,24 @@ const styles = StyleSheet.create({
     zIndex: 40,
   },
   // --- Modal detail log ---
+  calDetailBox: {
+    marginTop: spacing.md,
+    paddingTop: spacing.md,
+    borderTopWidth: 1,
+    borderTopColor: colors.border,
+  },
+  calDetailTitle: {
+    fontSize: fontSize.sm,
+    fontWeight: '700',
+    color: colors.ink,
+    marginBottom: 4,
+  },
+  calDetailEmpty: {
+    fontSize: fontSize.sm,
+    color: colors.muted,
+    fontWeight: '600',
+    paddingVertical: 8,
+  },
   modalHeaderRow: {
     flexDirection: 'row',
     alignItems: 'center',

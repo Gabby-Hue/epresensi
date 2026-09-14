@@ -6,6 +6,8 @@ export type SessionType = 'masuk' | 'pulang' | 'izin_sakit';
 
 export type AttendanceStatus = 'hadir' | 'izin' | 'sakit';
 
+export type ApprovalStatus = 'pending' | 'approved' | 'rejected';
+
 export interface UserProfile {
   id: string;
   email: string;
@@ -25,6 +27,7 @@ export interface OfficeSettings {
   latitude: number;
   longitude: number;
   radiusMeters: number;
+  color: string;
   updatedAt: string;
 }
 
@@ -42,12 +45,17 @@ export interface AttendanceRecord {
   longitude?: number;
   distanceMeters?: number;
   officeName?: string;
+  officeColor?: string | null;
   reason?: string;
   startDate?: string;
   endDate?: string;
   photoUrl?: string;
   documentUrl?: string;
   createdAt: string;
+  approvalStatus: ApprovalStatus;
+  reviewedBy?: string | null;
+  reviewedAt?: string | null;
+  reviewNote?: string | null;
 }
 
 export interface LocationCoords {

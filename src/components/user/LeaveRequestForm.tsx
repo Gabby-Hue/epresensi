@@ -287,7 +287,7 @@ export const LeaveRequestForm: React.FC<LeaveRequestFormProps> = ({ onSubmit, on
           <View style={styles.infoBanner}>
             <Feather name="info" size={18} color={colors.primary} style={{ marginRight: 10 }} />
             <Text style={styles.infoText}>
-              Setelah formulir disubmit, Anda akan diarahkan untuk mengambil swafoto (selfie) sebagai verifikasi kehadiran.
+              Setelah formulir disubmit, Anda akan diarahkan untuk mengambil swafoto sebagai verifikasi. Pengajuan masuk antrean dan menunggu persetujuan admin.
             </Text>
           </View>
 

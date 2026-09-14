@@ -1,5 +1,6 @@
 import { supabase, signUpClient } from '../lib/supabase';
 import {
+  ApprovalStatus,
   AttendanceRecord,
   AttendanceType,
   OfficeSettings,
@@ -14,6 +15,7 @@ let currentOfficeSettings: OfficeSettings = {
   latitude: -6.2088,
   longitude: 106.8456,
   radiusMeters: 150,
+  color: '#2196F3',
   updatedAt: new Date().toISOString(),
 };
 
@@ -28,8 +30,13 @@ function mapOfficeRow(row: any): OfficeSettings {
     latitude: Number(row.latitude),
     longitude: Number(row.longitude),
     radiusMeters: Number(row.radius_meters),
+    color: isHexColor(row.color) ? row.color : '#2196F3',
     updatedAt: row.updated_at,
   };
+}
+
+function isHexColor(v: any): boolean {
+  return typeof v === 'string' && /^#[0-9A-Fa-f]{6}$/.test(v);
 }
 
 // Supabase Auth menolak email tanpa @/. — normalisasi input asal admin tetap terdaftar
@@ -287,12 +294,13 @@ export class AttendanceService {
     return cachedOffices;
   }
 
-  /** Tambah titik kantor baru (nama + koordinat + radius custom). */
+  /** Tambah titik kantor baru (nama + koordinat + radius + warna custom). */
   static async addOffice(params: {
     officeName: string;
     latitude: number;
     longitude: number;
     radiusMeters: number;
+    color?: string;
   }): Promise<{ success: boolean; message: string; office?: OfficeSettings }> {
     const name = params.officeName.trim();
     if (!name) return { success: false, message: 'Nama kantor tidak boleh kosong.' };
@@ -302,6 +310,7 @@ export class AttendanceService {
     if (!Number.isInteger(params.radiusMeters) || params.radiusMeters <= 0) {
       return { success: false, message: 'Radius harus bilangan bulat positif (meter).' };
     }
+    const officeColor = isHexColor(params.color) ? (params.color as string) : '#2196F3';
     try {
       const { data, error } = await supabase
         .from('office_settings')
@@ -310,6 +319,7 @@ export class AttendanceService {
           latitude: params.latitude,
           longitude: params.longitude,
           radius_meters: params.radiusMeters,
+          color: officeColor,
         } as any)
         .select()
         .single();
@@ -322,10 +332,10 @@ export class AttendanceService {
     }
   }
 
-  /** Ubah nama / titik / radius kantor tertentu. */
+  /** Ubah nama / titik / radius / warna kantor tertentu. */
   static async updateOffice(
     id: string,
-    params: { officeName: string; latitude: number; longitude: number; radiusMeters: number }
+    params: { officeName: string; latitude: number; longitude: number; radiusMeters: number; color?: string }
   ): Promise<{ success: boolean; message: string }> {
     const name = params.officeName.trim();
     if (!name) return { success: false, message: 'Nama kantor tidak boleh kosong.' };
@@ -335,6 +345,7 @@ export class AttendanceService {
     if (!Number.isInteger(params.radiusMeters) || params.radiusMeters <= 0) {
       return { success: false, message: 'Radius harus bilangan bulat positif (meter).' };
     }
+    const officeColor = isHexColor(params.color) ? (params.color as string) : '#2196F3';
     try {
       const { error } = await supabase
         .from('office_settings')
@@ -343,6 +354,7 @@ export class AttendanceService {
           latitude: params.latitude,
           longitude: params.longitude,
           radius_meters: params.radiusMeters,
+          color: officeColor,
           updated_at: new Date().toISOString(),
         } as any)
         .eq('id', id);
@@ -462,6 +474,7 @@ export class AttendanceService {
     longitude?: number;
     distanceMeters?: number;
     officeName?: string;
+    officeColor?: string;
     reason?: string;
     startDate?: string;
     endDate?: string;
@@ -502,12 +515,15 @@ export class AttendanceService {
       longitude: params.longitude,
       distanceMeters: params.distanceMeters,
       officeName: params.officeName,
+      officeColor: params.officeColor ?? undefined,
       reason: params.reason,
       startDate: params.startDate || today,
       endDate: params.endDate || today,
       photoUrl: params.photoUrl,
       documentUrl: params.documentUrl,
       createdAt: now.toISOString(),
+      // Izin/sakit wajib lewat persetujuan admin; absen biasa langsung sah
+      approvalStatus: sType === 'izin_sakit' ? 'pending' : 'approved',
     };
 
     try {
@@ -526,11 +542,13 @@ export class AttendanceService {
           longitude: newRecord.longitude ?? null,
           distance_meters: newRecord.distanceMeters ?? null,
           office_name: newRecord.officeName ?? null,
+          office_color: newRecord.officeColor ?? null,
           reason: newRecord.reason ?? null,
           start_date: newRecord.startDate,
           end_date: newRecord.endDate,
           photo_url: newRecord.photoUrl ?? null,
           document_url: newRecord.documentUrl ?? null,
+          approval_status: newRecord.approvalStatus,
         } as any)
         .select()
         .single();
@@ -549,6 +567,49 @@ export class AttendanceService {
     const recs = await this.getUserAttendances(userId);
     return recs.find((r) => r.date === today) || null;
   }
+
+  /** Antrean pengajuan izin/sakit yang menunggu keputusan admin. */
+  static async getPendingApprovals(): Promise<AttendanceRecord[]> {
+    try {
+      const { data, error } = await supabase
+        .from('attendances')
+        .select('*')
+        .eq('approval_status', 'pending')
+        .order('clock_in_time', { ascending: false });
+      if (error) throw error;
+      if (!data || data.length === 0) return [];
+      return data.map(mapAttendanceRow);
+    } catch {
+      return [];
+    }
+  }
+
+  /** Admin menyetujui / menolak pengajuan. Ditolak = tidak dihitung hadir. */
+  static async reviewApproval(
+    id: string,
+    decision: 'approved' | 'rejected',
+    reviewerId: string,
+    note?: string
+  ): Promise<{ success: boolean; message: string }> {
+    try {
+      const { error } = await supabase
+        .from('attendances')
+        .update({
+          approval_status: decision,
+          reviewed_by: reviewerId,
+          reviewed_at: new Date().toISOString(),
+          review_note: note?.trim() || null,
+        } as any)
+        .eq('id', id);
+      if (error) throw new Error(error.message);
+      return {
+        success: true,
+        message: decision === 'approved' ? 'Pengajuan disetujui.' : 'Pengajuan ditolak.',
+      };
+    } catch (e: any) {
+      return { success: false, message: e?.message || 'Gagal memproses persetujuan.' };
+    }
+  }
 }
 
 function mapAttendanceRow(item: any): AttendanceRecord {
@@ -566,11 +627,16 @@ function mapAttendanceRow(item: any): AttendanceRecord {
     longitude: item.longitude,
     distanceMeters: item.distance_meters,
     officeName: item.office_name ?? undefined,
+    officeColor: item.office_color ?? null,
     reason: item.reason,
     startDate: item.start_date,
     endDate: item.end_date,
     photoUrl: item.photo_url,
     documentUrl: item.document_url,
     createdAt: item.created_at,
+    approvalStatus: (item.approval_status as ApprovalStatus) || 'approved',
+    reviewedBy: item.reviewed_by ?? null,
+    reviewedAt: item.reviewed_at ?? null,
+    reviewNote: item.review_note ?? null,
   };
 }

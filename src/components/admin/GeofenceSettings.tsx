@@ -7,15 +7,18 @@ import { MapView } from '../ui/MapView';
 import { getCurrentLocation } from '../../services/locationService';
 import { Feather } from '@expo/vector-icons';
 import { colors, fontSize, radius } from '../../theme';
+import { select, succeed, fail } from '../../services/feedbackService';
 
 interface OfficeManagerProps {
   offices: OfficeSettings[];
-  onAdd: (params: { officeName: string; latitude: number; longitude: number; radiusMeters: number }) => Promise<{ success: boolean; message: string }>;
-  onUpdate: (id: string, params: { officeName: string; latitude: number; longitude: number; radiusMeters: number }) => Promise<{ success: boolean; message: string }>;
+  onAdd: (params: { officeName: string; latitude: number; longitude: number; radiusMeters: number; color?: string }) => Promise<{ success: boolean; message: string }>;
+  onUpdate: (id: string, params: { officeName: string; latitude: number; longitude: number; radiusMeters: number; color?: string }) => Promise<{ success: boolean; message: string }>;
   onDelete: (id: string) => Promise<{ success: boolean; message: string }>;
 }
 
-const EMPTY_FORM = { officeName: '', latitude: '', longitude: '', radiusMeters: '150' };
+const EMPTY_FORM = { officeName: '', latitude: '', longitude: '', radiusMeters: '150', color: '#2196F3' };
+
+export const OFFICE_COLORS = ['#2196F3', '#16A34A', '#EA580C', '#7C3AED', '#0D9488', '#DC2626'];
 
 export const GeofenceSettings: React.FC<OfficeManagerProps> = ({
   offices,
@@ -24,6 +27,7 @@ export const GeofenceSettings: React.FC<OfficeManagerProps> = ({
   onDelete,
 }) => {
   const [editingId, setEditingId] = useState<string | null>(null);
+  const [showForm, setShowForm] = useState(false);
   const [form, setForm] = useState(EMPTY_FORM);
   const [saving, setSaving] = useState(false);
   const [fetchingGps, setFetchingGps] = useState(false);
@@ -38,6 +42,7 @@ export const GeofenceSettings: React.FC<OfficeManagerProps> = ({
         latitude: editing.latitude.toString(),
         longitude: editing.longitude.toString(),
         radiusMeters: editing.radiusMeters.toString(),
+        color: editing.color || '#2196F3',
       });
     }
   }, [editingId]);
@@ -50,18 +55,29 @@ export const GeofenceSettings: React.FC<OfficeManagerProps> = ({
   const previewRad = Number.isInteger(radNum) && radNum > 0 ? radNum : (editing?.radiusMeters ?? 150);
 
   const startAdd = () => {
+    select();
     setEditingId(null);
     setForm(EMPTY_FORM);
+    setShowForm(true);
   };
 
   const startEdit = (office: OfficeSettings) => {
+    select();
     setEditingId(office.id);
+    setShowForm(true);
     setForm({
       officeName: office.officeName,
       latitude: office.latitude.toString(),
       longitude: office.longitude.toString(),
       radiusMeters: office.radiusMeters.toString(),
+      color: office.color || '#2196F3',
     });
+  };
+
+  const cancelForm = () => {
+    setEditingId(null);
+    setForm(EMPTY_FORM);
+    setShowForm(false);
   };
 
   const handleUseCurrentGps = async () => {
@@ -85,14 +101,18 @@ export const GeofenceSettings: React.FC<OfficeManagerProps> = ({
       return;
     }
     setSaving(true);
+    const payload = { officeName: form.officeName, latitude: lat, longitude: lng, radiusMeters: rad, color: form.color };
     const res = editingId
-      ? await onUpdate(editingId, { officeName: form.officeName, latitude: lat, longitude: lng, radiusMeters: rad })
-      : await onAdd({ officeName: form.officeName, latitude: lat, longitude: lng, radiusMeters: rad });
+      ? await onUpdate(editingId, payload)
+      : await onAdd(payload);
     setSaving(false);
+    if (res.success) succeed();
+    else fail();
     Alert.alert(res.success ? 'Berhasil' : 'Gagal', res.message);
     if (res.success) {
       setEditingId(null);
       setForm(EMPTY_FORM);
+      setShowForm(false);
     }
   };
 
@@ -113,6 +133,8 @@ export const GeofenceSettings: React.FC<OfficeManagerProps> = ({
               setEditingId(null);
               setForm(EMPTY_FORM);
             }
+            if (res.success) succeed();
+            else fail();
             Alert.alert(res.success ? 'Berhasil' : 'Gagal', res.message);
           },
         },
@@ -133,6 +155,7 @@ export const GeofenceSettings: React.FC<OfficeManagerProps> = ({
             radiusMeters={previewRad}
             offices={offices}
             activeOfficeId={editingId}
+            mainColor={form.color}
             height={230}
             interactivePicker={true}
             onLocationSelect={(lat, lng) =>
@@ -148,7 +171,7 @@ export const GeofenceSettings: React.FC<OfficeManagerProps> = ({
           return (
             <View key={office.id} style={[styles.officeRow, active && styles.officeRowActive]}>
               <TouchableOpacity style={styles.officeInfo} activeOpacity={0.7} onPress={() => startEdit(office)}>
-                <View style={styles.officeDot} />
+                <View style={[styles.officeDot, { backgroundColor: office.color }]} />
                 <View style={{ flex: 1 }}>
                   <Text style={styles.officeName}>{office.officeName}</Text>
                   <Text style={styles.officeSub}>
@@ -178,6 +201,7 @@ export const GeofenceSettings: React.FC<OfficeManagerProps> = ({
         />
       </Card>
 
+      {showForm && (
       <Card title={editingId ? `Ubah: ${editing?.officeName}` : 'Titik baru'} icon={editingId ? 'edit' : 'plus-circle'}>
         <View style={styles.formGroup}>
           <Text style={styles.label}>Nama kantor</Text>
@@ -237,6 +261,31 @@ export const GeofenceSettings: React.FC<OfficeManagerProps> = ({
           </View>
         </View>
 
+        <View style={styles.formGroup}>
+          <Text style={styles.label}>Warna titik</Text>
+          <View style={styles.swatchRow}>
+            {OFFICE_COLORS.map((c) => (
+              <TouchableOpacity
+                key={c}
+                activeOpacity={0.8}
+                onPress={() => {
+                  select();
+                  setForm((f) => ({ ...f, color: c }));
+                }}
+                style={[
+                  styles.swatch,
+                  { backgroundColor: c },
+                  form.color === c && styles.swatchActive,
+                ]}
+                hitSlop={6}
+              >
+                {form.color === c && <Feather name="check" size={16} color="#FFFFFF" />}
+              </TouchableOpacity>
+            ))}
+          </View>
+          <Text style={styles.hint}>Warna ini jadi penanda lokasi di daftar absen karyawan.</Text>
+        </View>
+
         <Button
           title={saving ? 'Menyimpan...' : editingId ? 'Simpan perubahan' : 'Simpan titik'}
           variant="primary"
@@ -244,10 +293,11 @@ export const GeofenceSettings: React.FC<OfficeManagerProps> = ({
           loading={saving}
           onPress={handleSave}
         />
-        {editingId && (
-          <Button title="Batalkan" variant="outline" onPress={startAdd} style={styles.cancelBtn} />
+        {showForm && (
+          <Button title="Batalkan" variant="outline" onPress={cancelForm} style={styles.cancelBtn} />
         )}
       </Card>
+      )}
     </View>
   );
 };
@@ -285,6 +335,17 @@ const styles = StyleSheet.create({
     minHeight: 56,
   },
   row: { flexDirection: 'row' },
+  swatchRow: { flexDirection: 'row', gap: 10, marginTop: 2, marginBottom: 6 },
+  swatch: {
+    width: 44,
+    height: 44,
+    borderRadius: 22,
+    alignItems: 'center',
+    justifyContent: 'center',
+    borderWidth: 2,
+    borderColor: 'transparent',
+  },
+  swatchActive: { borderColor: colors.ink },
   gpsBtn: { marginBottom: 12 },
   radiusRow: { flexDirection: 'row', alignItems: 'center' },
   unitBox: {

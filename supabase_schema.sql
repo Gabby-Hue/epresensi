@@ -36,6 +36,7 @@ CREATE TABLE IF NOT EXISTS public.office_settings (
   latitude DOUBLE PRECISION NOT NULL DEFAULT -6.2088,
   longitude DOUBLE PRECISION NOT NULL DEFAULT 106.8456,
   radius_meters INTEGER NOT NULL DEFAULT 150,
+  color TEXT NOT NULL DEFAULT '#2196F3',
   updated_at TIMESTAMP WITH TIME ZONE DEFAULT timezone('utc'::text, now())
 );
 
@@ -76,6 +77,11 @@ CREATE TABLE IF NOT EXISTS public.attendances (
   end_date DATE,
   photo_url TEXT,
   document_url TEXT,
+  office_color TEXT,
+  approval_status TEXT NOT NULL DEFAULT 'approved' CHECK (approval_status IN ('pending', 'approved', 'rejected')),
+  reviewed_by UUID REFERENCES public.profiles(id) ON DELETE SET NULL,
+  reviewed_at TIMESTAMP WITH TIME ZONE,
+  review_note TEXT,
   created_at TIMESTAMP WITH TIME ZONE DEFAULT timezone('utc'::text, now())
 );
 
