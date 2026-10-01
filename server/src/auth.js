@@ -4,7 +4,7 @@ const bcrypt = require('bcryptjs');
 const SECRET = process.env.JWT_SECRET || 'dev-secret-change-me';
 
 function signToken(user) {
-  return jwt.sign({ id: user.id, role: user.role }, SECRET, { expiresIn: '30d' });
+  return jwt.sign({ id: user.id, role: user.role, company_id: user.company_id || null }, SECRET, { expiresIn: '30d' });
 }
 
 function authRequired(req, res, next) {
@@ -21,8 +21,13 @@ function authRequired(req, res, next) {
 }
 
 function adminOnly(req, res, next) {
-  if (req.auth && req.auth.role === 'admin') return next();
+  if (req.auth && (req.auth.role === 'admin' || req.auth.role === 'superadmin')) return next();
   return res.status(403).json({ error: 'Hanya admin yang boleh melakukan ini.' });
+}
+
+function superOnly(req, res, next) {
+  if (req.auth && req.auth.role === 'superadmin') return next();
+  return res.status(403).json({ error: 'Hanya superadmin yang boleh melakukan ini.' });
 }
 
 function hashPassword(pw) {
@@ -43,6 +48,8 @@ function publicUser(row) {
     fullName: row.full_name,
     role: row.role,
     department: row.department,
+    companyId: row.company_id ?? null,
+    companyName: row.company_name ?? undefined,
     avatarUrl: row.avatar_url || undefined,
     phoneNumber: row.phone_number || undefined,
     deviceModel: row.device_model || undefined,
@@ -80,6 +87,7 @@ function publicAttendance(row) {
     reviewedBy: row.reviewed_by,
     reviewedAt: row.reviewed_at,
     reviewNote: row.review_note,
+    companyId: row.company_id ?? null,
   };
 }
 
@@ -92,6 +100,7 @@ function publicOffice(row) {
     longitude: Number(row.longitude),
     radiusMeters: Number(row.radius_meters),
     color: row.color,
+    companyId: row.company_id ?? null,
     updatedAt: row.updated_at,
   };
 }
@@ -100,6 +109,7 @@ module.exports = {
   signToken,
   authRequired,
   adminOnly,
+  superOnly,
   hashPassword,
   verifyPassword,
   publicUser,

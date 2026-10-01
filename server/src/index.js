@@ -11,6 +11,7 @@ const {
   signToken,
   authRequired,
   adminOnly,
+  superOnly,
   hashPassword,
   verifyPassword,
   publicUser,
@@ -54,14 +55,28 @@ const storage = multer.diskStorage({
 });
 const upload = multer({ storage, limits: { fileSize: 30 * 1024 * 1024 } });
 
-// ---- Helper datetime: ubah ISO (2026-10-01T02:30:58.997Z) ke MySQL (YYYY-MM-DD HH:MM:SS) ----
+// ---- Helper datetime: normalisasi timestamps ke WIB (UTC+7) ----
+// Client send ISO UTC (toISOString) atau naive 'YYYY-MM-DD HH:MM:SS' WIB.
+// Konversion: input de-timestamp (Z/offset) digeser ke WIB; naive = passthrough.
+function wibNowNaive() {
+  const w = new Date(Date.now() + 7 * 3600 * 1000);
+  return w.toISOString().slice(0, 19).replace('T', ' ');
+}
+
 function toMySQLDatetime(v) {
-  if (!v) return new Date().toISOString().slice(0, 19).replace('T', ' ');
+  if (!v) return wibNowNaive();
   const s = String(v).trim();
+  // Naif MySQL format sudah WIB → passthrough
   if (/^\d{4}-\d{2}-\d{2} \d{2}:\d{2}(:\d{2})?$/.test(s)) return s.length === 16 ? s + ':00' : s;
   const d = new Date(s);
-  if (!isNaN(d.getTime())) return d.toISOString().slice(0, 19).replace('T', ' ');
-  return new Date().toISOString().slice(0, 19).replace('T', ' ');
+  if (isNaN(d.getTime())) return wibNowNaive();
+  // Kezikka eksplisit (Z atau ±HH:MM) → instant absoluto, geser ke WIB
+  if (/(Z|[+-]\d{2}:\d{2})\s*$/i.test(s)) {
+    return new Date(d.getTime() + 7 * 3600 * 1000).toISOString().slice(0, 19).replace('T', ' ');
+  }
+  // Naif ISO (no timezone) → asumsi sudah WIB, format saja
+  const p = (n) => String(n).padStart(2, '0');
+  return `${d.getFullYear()}-${p(d.getMonth() + 1)}-${p(d.getDate())} ${p(d.getHours())}:${p(d.getMinutes())}:${p(d.getSeconds())}`;
 }
 
 // ---- Root & Health ----
@@ -83,42 +98,70 @@ app.get('/health', async (req, res) => {
 });
 
 // ================= AUTH =================
-// Register: akun PERTAMA harus admin dan boleh tanpa token (bootstrap).
-// Setelah admin ada, hanya admin (pakai token) yang boleh mendaftarkan akun.
+// Register: akun PERTAMA harus superadmin dan boleh tanpa token (bootstrap).
+// Setelah itu: superadmin bisa buat superadmin/admin/employee di PT mana pun,
+// admin hanya bisa buat admin/employee di PT-nya sendiri.
 app.post('/auth/register', async (req, res) => {
   try {
-    const { email, password, fullName, role, department, phoneNumber } = req.body || {};
+    const { email, password, fullName, role, department, phoneNumber, companyId, company_id } = req.body || {};
     if (!email || !password || !fullName) {
       return res.status(400).json({ error: 'email, password, fullName wajib diisi' });
     }
     if (String(password).length < 6) {
       return res.status(400).json({ error: 'Kata sandi minimal 6 karakter.' });
     }
-    const wantRole = role === 'admin' ? 'admin' : 'employee';
-    const [[c]] = await pool.query("SELECT COUNT(*) AS n FROM users WHERE role='admin'");
+    const wantRole = role === 'superadmin' ? 'superadmin' : role === 'admin' ? 'admin' : 'employee';
+    const [[c]] = await pool.query('SELECT COUNT(*) AS n FROM users');
     let createdBy = null;
-    if (c.n > 0) {
+    let targetCompany = companyId ?? company_id ?? null;
+    if (c.n === 0) {
+      if (wantRole !== 'superadmin') {
+        return res.status(400).json({ error: 'Akun pertama harus superadmin.' });
+      }
+      // PT pertama: pakai yang sudah ada atau buat baru
+      const [[co]] = await pool.query('SELECT id FROM companies ORDER BY id LIMIT 1');
+      targetCompany = co ? co.id : null;
+      if (!targetCompany) {
+        const [cr] = await pool.query('INSERT INTO companies (name) VALUES (?)', ['PT SKMI']);
+        targetCompany = cr.insertId;
+      }
+    } else {
       const h = req.headers.authorization || '';
       if (!h.startsWith('Bearer ')) {
         return res.status(401).json({ error: 'Hanya admin yang boleh mendaftarkan akun.' });
       }
       const jwt = require('jsonwebtoken');
+      let p;
       try {
-        const p = jwt.verify(h.slice(7), process.env.JWT_SECRET || 'dev-secret-change-me');
-        if (p.role !== 'admin') return res.status(403).json({ error: 'Hanya admin yang boleh mendaftarkan akun.' });
-        createdBy = p.id;
+        p = jwt.verify(h.slice(7), process.env.JWT_SECRET || 'dev-secret-change-me');
       } catch {
         return res.status(401).json({ error: 'Token tidak valid.' });
       }
-    } else if (wantRole !== 'admin') {
-      return res.status(400).json({ error: 'Akun pertama harus admin.' });
+      const [[creator]] = await pool.query('SELECT * FROM users WHERE id=?', [p.id]);
+      if (!creator || (creator.role !== 'admin' && creator.role !== 'superadmin')) {
+        return res.status(403).json({ error: 'Hanya admin yang boleh mendaftarkan akun.' });
+      }
+      createdBy = creator.id;
+      if (creator.role === 'superadmin') {
+        if (wantRole === 'superadmin' && !targetCompany) targetCompany = creator.company_id;
+      } else {
+        // admin biasa: tidak boleh buat superadmin, PT dikunci ke PT-nya
+        if (wantRole === 'superadmin') {
+          return res.status(403).json({ error: 'Hanya superadmin yang boleh membuat superadmin.' });
+        }
+        targetCompany = creator.company_id;
+      }
+      if ((wantRole === 'admin' || wantRole === 'employee') && !targetCompany) {
+        return res.status(400).json({ error: 'PT (company) wajib dipilih.' });
+      }
     }
     const hash = await hashPassword(password);
     const [r] = await pool.query(
-      'INSERT INTO users (email, password_hash, full_name, role, department, phone_number, created_by) VALUES (?,?,?,?,?,?,?)',
-      [String(email).trim().toLowerCase(), hash, String(fullName).trim(), wantRole, department || 'General', phoneNumber || null, createdBy]
+      'INSERT INTO users (email, password_hash, full_name, role, department, phone_number, created_by, company_id) VALUES (?,?,?,?,?,?,?,?)',
+      [String(email).trim().toLowerCase(), hash, String(fullName).trim(), wantRole, department || 'General', phoneNumber || null, createdBy, targetCompany]
     );
-    const [[row]] = await pool.query('SELECT * FROM users WHERE id=?', [r.insertId]);
+    const [[row]] = await pool.query(
+      'SELECT u.*, c.name AS company_name FROM users u LEFT JOIN companies c ON c.id=u.company_id WHERE u.id=?', [r.insertId]);
     res.status(201).json({ user: publicUser(row) });
   } catch (e) {
     if (e.code === 'ER_DUP_ENTRY') return res.status(409).json({ error: 'Email ini sudah terdaftar.' });
@@ -135,7 +178,7 @@ app.post('/auth/login', async (req, res) => {
     if (!row || !(await verifyPassword(password, row.password_hash))) {
       return res.status(401).json({ error: 'Email atau kata sandi salah.' });
     }
-    if (row.role !== 'admin') {
+    if (row.role !== 'admin' && row.role !== 'superadmin') {
       if (row.device_id && deviceId && row.device_id !== deviceId) {
         return res.status(403).json({
           error: `Akun terkunci di perangkat ${row.device_model || row.device_id}. Hubungi admin untuk atur ulang.`,
@@ -154,7 +197,8 @@ app.post('/auth/login', async (req, res) => {
 });
 
 app.get('/me', authRequired, async (req, res) => {
-  const [[row]] = await pool.query('SELECT * FROM users WHERE id=?', [req.auth.id]);
+  const [[row]] = await pool.query(
+    'SELECT u.*, c.name AS company_name FROM users u LEFT JOIN companies c ON c.id=u.company_id WHERE u.id=?', [req.auth.id]);
   if (!row) return res.status(404).json({ error: 'Akun tidak ditemukan.' });
   res.json({ user: publicUser(row) });
 });
@@ -167,11 +211,71 @@ app.patch('/me/avatar', authRequired, async (req, res) => {
   res.json({ user: publicUser(row) });
 });
 
+// ================= COMPANIES (PT / cabang beda PT) =================
+// Hanya superadmin yang boleh kelola daftar PT.
+app.get('/companies', authRequired, adminOnly, async (req, res) => {
+  const [rows] = await pool.query('SELECT * FROM companies ORDER BY name');
+  res.json({ companies: rows.map((c) => ({ id: c.id, name: c.name, createdAt: c.created_at })) });
+});
+
+app.post('/companies', authRequired, superOnly, async (req, res) => {
+  const name = String(req.body?.name || '').trim();
+  if (!name) return res.status(400).json({ error: 'Nama PT wajib diisi.' });
+  try {
+    const [r] = await pool.query('INSERT INTO companies (name) VALUES (?)', [name]);
+    const [[row]] = await pool.query('SELECT * FROM companies WHERE id=?', [r.insertId]);
+    res.status(201).json({ company: { id: row.id, name: row.name, createdAt: row.created_at } });
+  } catch (e) {
+    if (e.code === 'ER_DUP_ENTRY') return res.status(409).json({ error: 'PT ini sudah ada.' });
+    res.status(500).json({ error: e.message });
+  }
+});
+
+app.patch('/companies/:id', authRequired, superOnly, async (req, res) => {
+  const name = String(req.body?.name || '').trim();
+  if (!name) return res.status(400).json({ error: 'Nama PT wajib diisi.' });
+  await pool.query('UPDATE companies SET name=? WHERE id=?', [name, req.params.id]);
+  const [[row]] = await pool.query('SELECT * FROM companies WHERE id=?', [req.params.id]);
+  if (!row) return res.status(404).json({ error: 'PT tidak ditemukan.' });
+  res.json({ company: { id: row.id, name: row.name, createdAt: row.created_at } });
+});
+
+app.delete('/companies/:id', authRequired, superOnly, async (req, res) => {
+  const [[used]] = await pool.query('SELECT COUNT(*) AS n FROM users WHERE company_id=?', [req.params.id]);
+  if (used.n > 0) return res.status(400).json({ error: 'PT masih dipakai akun, pindahkan dulu.' });
+  await pool.query('DELETE FROM companies WHERE id=?', [req.params.id]);
+  res.json({ ok: true });
+});
+
+// Helper: PT milik peminta (admin dikunci ke PT-nya, superadmin bebas + filter ?company_id=)
+async function requesterCompany(req) {
+  const [[me]] = await pool.query('SELECT * FROM users WHERE id=?', [req.auth.id]);
+  if (!me) return { me: null, companyId: null };
+  if (me.role === 'superadmin') {
+    const q = req.query?.company_id ? Number(req.query.company_id) : null;
+    return { me, companyId: q || null, isSuper: true };
+  }
+  return { me, companyId: me.company_id, isSuper: false };
+}
+
 // ================= USERS =================
 app.get('/users', authRequired, adminOnly, async (req, res) => {
-  const where = req.query.role ? 'WHERE role=?' : '';
-  const args = req.query.role ? [req.query.role] : [];
-  const [rows] = await pool.query(`SELECT * FROM users ${where} ORDER BY full_name`, args);
+  const { companyId, isSuper } = await requesterCompany(req);
+  let where = '';
+  const args = [];
+  if (!isSuper) {
+    where = 'WHERE u.company_id=?';
+    args.push(companyId);
+  } else if (req.query.company_id) {
+    where = 'WHERE u.company_id=?';
+    args.push(Number(req.query.company_id));
+  }
+  if (req.query.role) {
+    where += (where ? ' AND' : 'WHERE') + ' u.role=?';
+    args.push(req.query.role);
+  }
+  const [rows] = await pool.query(
+    `SELECT u.*, c.name AS company_name FROM users u LEFT JOIN companies c ON c.id=u.company_id ${where} ORDER BY u.full_name`, args);
   res.json({ users: rows.map(publicUser) });
 });
 
@@ -179,10 +283,18 @@ app.get('/users', authRequired, adminOnly, async (req, res) => {
 app.patch('/users/:id', authRequired, async (req, res) => {
   const targetId = Number(req.params.id);
   const isSelf = targetId === req.auth.id;
-  const isAdmin = req.auth.role === 'admin';
+  const isAdmin = req.auth.role === 'admin' || req.auth.role === 'superadmin';
 
   if (!isSelf && !isAdmin) {
     return res.status(403).json({ error: 'Tidak memiliki izin mengubah data pengguna ini.' });
+  }
+  // Admin biasa tidak boleh menyentuh akun PT lain
+  if (!isSelf && req.auth.role === 'admin') {
+    const [[t]] = await pool.query('SELECT company_id FROM users WHERE id=?', [targetId]);
+    const [[s]] = await pool.query('SELECT company_id FROM users WHERE id=?', [req.auth.id]);
+    if (!t || t.company_id !== s.company_id) {
+      return res.status(403).json({ error: 'Akun ini milik PT lain.' });
+    }
   }
 
   const { fullName, department, phoneNumber, avatarUrl } = req.body || {};
@@ -240,21 +352,39 @@ app.post('/departments', authRequired, adminOnly, async (req, res) => {
 
 // ================= OFFICES =================
 app.get('/offices', authRequired, async (req, res) => {
-  const [rows] = await pool.query('SELECT * FROM office_settings ORDER BY id');
+  const { companyId, isSuper } = await requesterCompany(req);
+  let where = '';
+  const args = [];
+  if (!isSuper) {
+    where = 'WHERE company_id=?';
+    args.push(companyId);
+  } else if (req.query.company_id) {
+    where = 'WHERE company_id=?';
+    args.push(Number(req.query.company_id));
+  }
+  const [rows] = await pool.query(`SELECT * FROM office_settings ${where} ORDER BY id`, args);
   res.json({ offices: rows.map(publicOffice) });
 });
 
 app.post('/offices', authRequired, adminOnly, async (req, res) => {
+  const { companyId, isSuper, me } = await requesterCompany(req);
+  const targetCompany = isSuper ? (Number(req.body?.companyId ?? req.body?.company_id) || me.company_id) : companyId;
+  if (!targetCompany) return res.status(400).json({ error: 'PT (company) wajib dipilih.' });
   const { officeName, latitude, longitude, radiusMeters, color } = req.body || {};
   const [r] = await pool.query(
-    'INSERT INTO office_settings (office_name, latitude, longitude, radius_meters, color) VALUES (?,?,?,?,?)',
-    [officeName || 'Kantor', Number(latitude), Number(longitude), Number(radiusMeters) || 150, color || '#2196F3']
+    'INSERT INTO office_settings (office_name, latitude, longitude, radius_meters, color, company_id) VALUES (?,?,?,?,?,?)',
+    [officeName || 'Kantor', Number(latitude), Number(longitude), Number(radiusMeters) || 150, color || '#2196F3', targetCompany]
   );
   const [[row]] = await pool.query('SELECT * FROM office_settings WHERE id=?', [r.insertId]);
   res.status(201).json({ office: publicOffice(row) });
 });
 
 app.patch('/offices/:id', authRequired, adminOnly, async (req, res) => {
+  const { companyId, isSuper } = await requesterCompany(req);
+  if (!isSuper) {
+    const [[o]] = await pool.query('SELECT company_id FROM office_settings WHERE id=?', [req.params.id]);
+    if (!o || o.company_id !== companyId) return res.status(403).json({ error: 'Titik kantor ini milik PT lain.' });
+  }
   const { officeName, latitude, longitude, radiusMeters, color } = req.body || {};
   await pool.query(
     'UPDATE office_settings SET office_name=COALESCE(?,office_name), latitude=COALESCE(?,latitude), longitude=COALESCE(?,longitude), radius_meters=COALESCE(?,radius_meters), color=COALESCE(?,color) WHERE id=?',
@@ -265,17 +395,29 @@ app.patch('/offices/:id', authRequired, adminOnly, async (req, res) => {
 });
 
 app.delete('/offices/:id', authRequired, adminOnly, async (req, res) => {
+  const { companyId, isSuper } = await requesterCompany(req);
+  if (!isSuper) {
+    const [[o]] = await pool.query('SELECT company_id FROM office_settings WHERE id=?', [req.params.id]);
+    if (!o || o.company_id !== companyId) return res.status(403).json({ error: 'Titik kantor ini milik PT lain.' });
+  }
   await pool.query('DELETE FROM office_settings WHERE id=?', [req.params.id]);
   res.json({ ok: true });
 });
 
 // ================= ATTENDANCES =================
 app.get('/attendances', authRequired, async (req, res) => {
+  const { companyId, isSuper } = await requesterCompany(req);
   const conds = [];
   const args = [];
-  // Karyawan hanya boleh lihat miliknya sendiri
-  const userId = req.auth.role === 'admin' ? req.query.user_id : req.auth.id;
-  if (userId) { conds.push('user_id=?'); args.push(userId); }
+  if (!isSuper) {
+    // Karyawan: hanya miliknya. Admin: hanya PT-nya.
+    conds.push(req.auth.role === 'employee' ? 'user_id=?' : 'company_id=?');
+    args.push(req.auth.role === 'employee' ? req.auth.id : companyId);
+    if (req.auth.role === 'admin' && req.query.user_id) { conds.push('user_id=?'); args.push(req.query.user_id); }
+  } else {
+    if (req.query.company_id) { conds.push('company_id=?'); args.push(Number(req.query.company_id)); }
+    if (req.query.user_id) { conds.push('user_id=?'); args.push(req.query.user_id); }
+  }
   if (req.query.month) { conds.push("DATE_FORMAT(date,'%Y-%m')=?"); args.push(req.query.month); }
   if (req.query.approval) { conds.push('approval_status=?'); args.push(req.query.approval); }
   const where = conds.length ? 'WHERE ' + conds.join(' AND ') : '';
@@ -295,14 +437,14 @@ app.post('/attendances', authRequired, async (req, res) => {
     const approval = sessionType === 'izin_sakit' ? 'pending' : 'approved';
     const [r] = await pool.query(
       `INSERT INTO attendances (user_id, user_name, user_email, type, session_type, status, date,
-        clock_in_time, latitude, longitude, distance_meters, office_name, office_color,
+        clock_in_time, latitude, longitude, distance_meters, office_name, office_color, company_id,
         reason, start_date, end_date, photo_url, document_url, approval_status)
-       VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?)`,
+       VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?)`,
       [
         me.id, me.full_name, me.email, b.type, sessionType, b.status, b.date,
         toMySQLDatetime(b.clockInTime || b.clock_in_time),
         b.latitude ?? null, b.longitude ?? null, b.distanceMeters ?? b.distance_meters ?? null,
-        b.officeName ?? b.office_name ?? null, b.officeColor ?? b.office_color ?? null,
+        b.officeName ?? b.office_name ?? null, b.officeColor ?? b.office_color ?? null, me.company_id ?? null,
         b.reason ?? null, b.startDate ?? b.start_date ?? null, b.endDate ?? b.end_date ?? null,
         b.photoUrl ?? b.photo_url ?? null, b.documentUrl ?? b.document_url ?? null, approval,
       ]
@@ -314,11 +456,18 @@ app.post('/attendances', authRequired, async (req, res) => {
   }
 });
 
-// Review izin/sakit oleh admin
+// Review izin/sakit oleh admin (dikunci per PT, kecuali superadmin)
 app.patch('/attendances/:id/review', authRequired, adminOnly, async (req, res) => {
   const { decision, note } = req.body || {};
   if (!['approved', 'rejected'].includes(decision)) {
     return res.status(400).json({ error: 'decision harus approved atau rejected.' });
+  }
+  if (req.auth.role !== 'superadmin') {
+    const [[me]] = await pool.query('SELECT company_id FROM users WHERE id=?', [req.auth.id]);
+    const [[att]] = await pool.query('SELECT company_id FROM attendances WHERE id=?', [req.params.id]);
+    if (!att || att.company_id !== me.company_id) {
+      return res.status(403).json({ error: 'Pengajuan ini milik PT lain.' });
+    }
   }
   await pool.query('UPDATE attendances SET approval_status=?, reviewed_by=?, reviewed_at=NOW(), review_note=? WHERE id=?', [
     decision, req.auth.id, note || null, req.params.id,

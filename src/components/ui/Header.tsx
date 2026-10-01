@@ -30,7 +30,7 @@ export const Header: React.FC<HeaderProps> = ({ user, onPressProfile }) => {
         <View>
           <Text style={styles.appName}>E-Presensi</Text>
           <Text style={styles.role}>
-            {user.role === 'admin' ? 'Admin Sistem' : user.department || 'Karyawan'}
+            {user.role === 'superadmin' ? 'Superadmin' : user.role === 'admin' ? 'Admin Sistem' : user.department || 'Karyawan'}
           </Text>
         </View>
       </View>

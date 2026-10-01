@@ -233,7 +233,7 @@ export const ProfileScreen: React.FC<ProfileScreenProps> = ({
 
             <Text style={styles.userNameText}>{user.fullName}</Text>
             <Text style={styles.userRoleText}>
-              {user.role === 'admin' ? 'Administrator' : departmentName}
+              {user.role === 'superadmin' ? 'Superadmin' : user.role === 'admin' ? 'Administrator' : departmentName}
             </Text>
           </View>
 

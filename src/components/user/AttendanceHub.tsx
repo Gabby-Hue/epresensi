@@ -37,7 +37,7 @@ import { ProfileScreen } from './ProfileScreen';
 import { BottomNavBar, UserTabKey } from '../ui/BottomNavBar';
 import { StorageService } from '../../services/storageService';
 import { succeed, fail, select } from '../../services/feedbackService';
-import { isWeekendDateString } from '../../utils/dates';
+import { isWeekendDateString, isAfterTimeOfDay, todayWIB } from '../../utils/dates';
 import { Feather } from '@expo/vector-icons';
 import { colors, fontSize, neoShadow, radius, spacing } from '../../theme';
 
@@ -233,8 +233,8 @@ export const AttendanceHub: React.FC<AttendanceHubProps> = ({
   const greeting = getGreeting(curHour);
 
   // Aturan jam datang: 08:00 - 10:00 (sebelum 08:00 tetap sah tepat waktu).
-  // Lewat pukul 10:00 dikategorikan Terlambat.
-  const isLateCheckIn = curHour > 10 || (curHour === 10 && curMin > 0);
+    // Lewat pukul 10:00 dikategorikan Terlambat (presisi sekond: 10:00:01 sudah terlambat).
+    const isLateCheckIn = isAfterTimeOfDay(currentTime, 10, 0);
 
   // Aturan jam pulang: terkunci sebelum pukul 17:00 WIB hingga batas 00:00 (23:59:59).
   const isClockOutUnlocked = curHour >= 17;
@@ -253,27 +253,21 @@ export const AttendanceHub: React.FC<AttendanceHubProps> = ({
   const monthAllRecords = userHistory.filter((r) => new Date(r.clockInTime) >= currentMonthStart);
 
   const onTimeCount = monthAllRecords.filter((r) => {
-    if (r.sessionType !== 'masuk') return false;
-    const d = new Date(r.clockInTime);
-    const h = d.getHours();
-    const m = d.getMinutes();
-    return h < 10 || (h === 10 && m === 0);
-  }).length;
+      if (r.sessionType !== 'masuk') return false;
+      return !isAfterTimeOfDay(new Date(r.clockInTime), 10, 0);
+    }).length;
 
-  const lateCount = monthAllRecords.filter((r) => {
-    if (r.sessionType !== 'masuk') return false;
-    const d = new Date(r.clockInTime);
-    const h = d.getHours();
-    const m = d.getMinutes();
-    return h > 10 || (h === 10 && m > 0);
-  }).length;
+    const lateCount = monthAllRecords.filter((r) => {
+      if (r.sessionType !== 'masuk') return false;
+      return isAfterTimeOfDay(new Date(r.clockInTime), 10, 0);
+    }).length;
 
   const leaveCount = monthAllRecords.filter(
     (r) => r.type === 'izin_sakit' || r.sessionType === 'izin_sakit'
   ).length;
 
   // ---- Data untuk tombol & logs (khusus sesi masuk / pulang) ----
-  const todayStr = new Date().toISOString().split('T')[0];
+    const todayStr = todayWIB();
   const todayMasuk = userHistory.find((r) => r.date === todayStr && r.sessionType === 'masuk');
   const todayPulang = userHistory.find((r) => r.date === todayStr && r.sessionType === 'pulang');
 
@@ -388,9 +382,7 @@ export const AttendanceHub: React.FC<AttendanceHubProps> = ({
         setPendingLeaveData(null);
       } else {
         const now = new Date();
-        const h = now.getHours();
-        const m = now.getMinutes();
-        const isLate = mode === 'masuk' && (h > 10 || (h === 10 && m > 0));
+                const isLate = mode === 'masuk' && isAfterTimeOfDay(now, 10, 0);
         let finalReason = place === 'rumah' ? reason.trim() : undefined;
         if (isLate) {
           finalReason = finalReason ? `${finalReason} (Terlambat: Masuk > 10:00)` : 'Terlambat (> 10:00 WIB)';

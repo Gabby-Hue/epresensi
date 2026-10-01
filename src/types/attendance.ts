@@ -1,4 +1,10 @@
-export type UserRole = 'admin' | 'employee';
+export type UserRole = 'superadmin' | 'admin' | 'employee';
+
+export interface Company {
+  id: string;
+  name: string;
+  createdAt?: string;
+}
 
 export type AttendanceType = 'luring' | 'daring' | 'izin_sakit';
 
@@ -14,6 +20,8 @@ export interface UserProfile {
   fullName: string;
   role: UserRole;
   department?: string;
+  companyId?: string | null;
+  companyName?: string;
   avatarUrl?: string;
   createdBy?: string | null;
   phoneNumber?: string;
@@ -28,6 +36,7 @@ export interface OfficeSettings {
   longitude: number;
   radiusMeters: number;
   color: string;
+  companyId?: string | null;
   updatedAt: string;
 }
 
@@ -41,6 +50,7 @@ export interface AttendanceRecord {
   status: AttendanceStatus;
   date: string; // YYYY-MM-DD
   clockInTime: string; // ISO string
+  companyId?: string | null;
   latitude?: number;
   longitude?: number;
   distanceMeters?: number;

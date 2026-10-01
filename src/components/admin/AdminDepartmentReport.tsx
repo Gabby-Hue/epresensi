@@ -10,6 +10,8 @@ import {
 } from 'react-native';
 import { UserProfile, AttendanceRecord } from '../../types/attendance';
 import { AttendanceService } from '../../services/attendanceService';
+import { todayWIB } from '../../utils/dates';
+import { buildRekap, exportRekapCSV, exportRekapXLSX } from '../../services/exportService';
 import { Card } from '../ui/Card';
 import { Feather } from '@expo/vector-icons';
 import { colors, fontSize, radius } from '../../theme';
@@ -76,61 +78,42 @@ export const AdminDepartmentReport: React.FC<{ users: UserProfile[] }> = ({ user
     [allDepartments, users, records]
   );
 
-  const exportDepartment = (department: string) => {
+  const guardWeb = (label: string) => {
     select();
     if (Platform.OS !== 'web') {
-      Alert.alert('Export CSV', 'Export saat ini tersedia melalui dashboard web.');
-      return;
+      Alert.alert(label, 'Export saat ini tersedia melalui dashboard web.');
+      return false;
     }
-    const staff = users.filter((u) => u.role === 'employee' && u.department === department);
-    const ids = new Set(staff.map((u) => u.id));
-    const rows = records
-      .filter((r) => ids.has(r.userId))
-      .sort(
-        (a, b) =>
-          a.date.localeCompare(b.date) ||
-          (a.userName || '').localeCompare(b.userName || '') ||
-          a.clockInTime.localeCompare(b.clockInTime)
-      )
-      .map((r) => {
-        const user = staff.find((u) => u.id === r.userId);
-        const session = r.sessionType === 'pulang' ? 'Pulang' : r.sessionType === 'izin_sakit' ? 'Izin/Sakit' : 'Masuk';
-        const time = new Date(r.clockInTime).toLocaleTimeString('id-ID', { hour: '2-digit', minute: '2-digit' });
-        return [user?.fullName || r.userName || '', department, r.date, session, time, r.approvalStatus || 'approved', r.status || ''].map(csvCell).join(',');
-      });
-    const csv = '\ufeff' + ['Nama,Departemen,Tanggal,Sesi,Jam,Status Persetujuan,Status Absen', ...rows].join('\r\n');
-    const blob = new Blob([csv], { type: 'text/csv;charset=utf-8;' });
-    const url = URL.createObjectURL(blob);
-    const anchor = document.createElement('a');
-    anchor.href = url;
-    anchor.download = `laporan-absensi-${department.toLowerCase()}-${new Date().toISOString().slice(0, 10)}.csv`;
-    anchor.click();
-    URL.revokeObjectURL(url);
+    return true;
+  };
+
+  const stamp = todayWIB();
+  const fname = (scope: string, ext: string) => `laporan-absensi-${scope}-${stamp}.${ext}`;
+
+  // Format baru: 1 baris per orang per tanggal, Jam Masuk (biru) + Jam Pulang (kuning di XLSX),
+  // kolom tambahan: PT, Kantor, Jarak, Alasan. CSV tetap tersedia sebagai cadangan polos.
+  const exportDepartment = (department: string) => {
+    if (!guardWeb('Export Excel')) return;
+    const rows = buildRekap(users, records, { department });
+    exportRekapXLSX(rows, fname(`${department.toLowerCase()}-rekap`, 'xlsx'));
+  };
+
+  const exportDepartmentCSV = (department: string) => {
+    if (!guardWeb('Export CSV')) return;
+    const rows = buildRekap(users, records, { department });
+    exportRekapCSV(rows, fname(`${department.toLowerCase()}-rekap`, 'csv'));
   };
 
   const exportAll = () => {
-    select();
-    if (Platform.OS !== 'web') {
-      Alert.alert('Export CSV', 'Export saat ini tersedia melalui dashboard web.');
-      return;
-    }
-    const rows = records
-      .slice()
-      .sort((a, b) => a.date.localeCompare(b.date) || (a.userName || '').localeCompare(b.userName || ''))
-      .map((r) => {
-        const user = users.find((u) => u.id === r.userId);
-        const session = r.sessionType === 'pulang' ? 'Pulang' : r.sessionType === 'izin_sakit' ? 'Izin/Sakit' : 'Masuk';
-        const time = new Date(r.clockInTime).toLocaleTimeString('id-ID', { hour: '2-digit', minute: '2-digit' });
-        return [user?.fullName || r.userName || '', user?.department || 'General', r.date, session, time, r.approvalStatus || 'approved', r.status || ''].map(csvCell).join(',');
-      });
-    const csv = '\ufeff' + ['Nama,Departemen,Tanggal,Sesi,Jam,Status Persetujuan,Status Absen', ...rows].join('\r\n');
-    const blob = new Blob([csv], { type: 'text/csv;charset=utf-8;' });
-    const url = URL.createObjectURL(blob);
-    const anchor = document.createElement('a');
-    anchor.href = url;
-    anchor.download = `laporan-absensi-semua-${new Date().toISOString().slice(0, 10)}.csv`;
-    anchor.click();
-    URL.revokeObjectURL(url);
+    if (!guardWeb('Export Excel')) return;
+    const rows = buildRekap(users, records);
+    exportRekapXLSX(rows, fname('semua-rekap', 'xlsx'));
+  };
+
+  const exportAllCSV = () => {
+    if (!guardWeb('Export CSV')) return;
+    const rows = buildRekap(users, records);
+    exportRekapCSV(rows, fname('semua-rekap', 'csv'));
   };
 
   return (
@@ -139,14 +122,23 @@ export const AdminDepartmentReport: React.FC<{ users: UserProfile[] }> = ({ user
       subtitle="Tingkat kehadiran dan statistik per divisi kerja"
       icon="briefcase"
       action={
-        <TouchableOpacity
-          style={styles.exportAllBtn}
-          onPress={exportAll}
-          activeOpacity={0.8}
-        >
-          <Feather name="download" size={14} color={colors.primaryDark} style={{ marginRight: 6 }} />
-          <Text style={styles.exportAllText}>Ekspor CSV</Text>
-        </TouchableOpacity>
+        <View style={{ flexDirection: 'row', gap: 8 }}>
+          <TouchableOpacity
+            style={styles.exportAllBtn}
+            onPress={exportAll}
+            activeOpacity={0.8}
+          >
+            <Feather name="download" size={14} color={colors.primaryDark} style={{ marginRight: 6 }} />
+            <Text style={styles.exportAllText}>Excel</Text>
+          </TouchableOpacity>
+          <TouchableOpacity
+            style={[styles.exportAllBtn, { backgroundColor: colors.surfaceSoft }]}
+            onPress={exportAllCSV}
+            activeOpacity={0.8}
+          >
+            <Text style={[styles.exportAllText, { color: colors.muted }]}>CSV</Text>
+          </TouchableOpacity>
+        </View>
       }
     >
       {loading ? (
@@ -226,7 +218,14 @@ export const AdminDepartmentReport: React.FC<{ users: UserProfile[] }> = ({ user
                     onPress={() => exportDepartment(item.department)}
                     hitSlop={8}
                   >
-                    <Feather name="download" size={12} color={colors.muted} />
+                    <Feather name="download" size={12} color={colors.primaryDark} />
+                  </TouchableOpacity>
+                  <TouchableOpacity
+                    style={[styles.deptExportBtn, { marginLeft: 4 }]}
+                    onPress={() => exportDepartmentCSV(item.department)}
+                    hitSlop={8}
+                  >
+                    <Text style={{ fontSize: 10, color: colors.muted, fontWeight: '700' }}>CSV</Text>
                   </TouchableOpacity>
                 </View>
               </View>

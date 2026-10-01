@@ -18,6 +18,7 @@ import { GeofenceSettings } from './GeofenceSettings';
 import { AttendanceFeed } from './AttendanceFeed';
 import { LeaveDetailModal } from './LeaveDetailModal';
 import { AdminEmployeeManager } from './AdminEmployeeManager';
+import { AdminCompanyManager } from './AdminCompanyManager';
 import { AdminEmployeeRecap } from './AdminEmployeeRecap';
 import { AdminApprovalQueue } from './AdminApprovalQueue';
 import { AdminDepartmentReport } from './AdminDepartmentReport';
@@ -40,14 +41,15 @@ interface AdminDashboardProps {
   onPressProfile?: () => void;
 }
 
-type TabKey = 'monitoring' | 'report' | 'geofence' | 'employees' | 'approval';
+type TabKey = 'monitoring' | 'report' | 'geofence' | 'employees' | 'approval' | 'companies';
 
-const TABS: Array<{ key: TabKey; label: string; icon: keyof typeof Feather.glyphMap }> = [
+const TABS: Array<{ key: TabKey; label: string; icon: keyof typeof Feather.glyphMap; superOnly?: boolean }> = [
   { key: 'monitoring', label: 'Monitoring', icon: 'pie-chart' },
   { key: 'report', label: 'Laporan', icon: 'bar-chart-2' },
   { key: 'geofence', label: 'Titik & Radius', icon: 'map' },
   { key: 'employees', label: 'Kelola Karyawan', icon: 'user-plus' },
   { key: 'approval', label: 'Persetujuan', icon: 'inbox' },
+  { key: 'companies', label: 'PT & Admin', icon: 'briefcase', superOnly: true },
 ];
 
 const PAGE_META: Record<TabKey, { title: string; sub: string }> = {
@@ -56,6 +58,7 @@ const PAGE_META: Record<TabKey, { title: string; sub: string }> = {
   geofence: { title: 'Titik & Radius', sub: 'Kelola lokasi dan radius absen kantor' },
   employees: { title: 'Kelola Karyawan', sub: 'Akun dan perangkat karyawan' },
   approval: { title: 'Persetujuan Izin', sub: 'Pengajuan yang menunggu keputusan' },
+  companies: { title: 'PT & Admin Cabang', sub: 'Kelola perusahaan dan admin tiap PT' },
 };
 
 export const AdminDashboard: React.FC<AdminDashboardProps> = ({
@@ -119,6 +122,8 @@ export const AdminDashboard: React.FC<AdminDashboardProps> = ({
     setSelectedRecord(null);
     onRefreshUsers();
   };
+
+  const visibleTabs = TABS.filter((t) => !t.superOnly || currentAdmin.role === 'superadmin');
 
   const initials = currentAdmin.fullName
     .split(' ')
@@ -311,6 +316,14 @@ export const AdminDashboard: React.FC<AdminDashboardProps> = ({
           onSelect={(rec) => setSelectedRecord(rec)}
         />
       )}
+
+      {activeTab === 'companies' && currentAdmin.role === 'superadmin' && (
+        <AdminCompanyManager
+          currentAdmin={currentAdmin}
+          users={users}
+          onChanged={onRefreshUsers}
+        />
+      )}
     </>
   );
 
@@ -334,7 +347,7 @@ export const AdminDashboard: React.FC<AdminDashboardProps> = ({
               </View>
             </View>
 
-            {TABS.map((tab) => {
+            {visibleTabs.map((tab) => {
               const active = activeTab === tab.key;
               const count = tab.key === 'approval' ? pendingApprovals.length : 0;
               return (
@@ -410,7 +423,7 @@ export const AdminDashboard: React.FC<AdminDashboardProps> = ({
         /* Layout HP: tab atas + konten */
         <>
           <View style={styles.tabHeader}>
-            {TABS.map((tab) => {
+            {visibleTabs.map((tab) => {
               const active = activeTab === tab.key;
               const count = tab.key === 'approval' ? pendingApprovals.length : 0;
               return (

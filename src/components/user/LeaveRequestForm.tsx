@@ -17,6 +17,7 @@ import { Modal } from '../ui/Modal';
 import { Feather } from '@expo/vector-icons';
 import { colors, fontSize, radius, spacing } from '../../theme';
 import { select } from '../../services/feedbackService';
+import { todayWIB } from '../../utils/dates';
 
 const CAL_MONTH_NAMES = [
   'Januari', 'Februari', 'Maret', 'April', 'Mei', 'Juni',
@@ -55,7 +56,7 @@ interface LeaveRequestFormProps {
 }
 
 export const LeaveRequestForm: React.FC<LeaveRequestFormProps> = ({ onSubmit, onBack, loading = false }) => {
-  const today = new Date().toISOString().split('T')[0];
+  const today = todayWIB();
   const [leaveCategory, setLeaveCategory] = useState<'sakit' | 'izin'>('sakit');
   const [startDate, setStartDate] = useState(today);
   const [endDate, setEndDate] = useState(today);

@@ -8,6 +8,7 @@ import {
   UserProfile,
 } from '../types/attendance';
 import { getDeviceInfo } from './deviceService';
+import { todayWIB } from '../utils/dates';
 
 let currentOfficeSettings: OfficeSettings = {
   id: '1',
@@ -36,6 +37,8 @@ function mapUser(u: any): UserProfile {
     fullName: u.fullName,
     role: u.role,
     department: u.department,
+    companyId: u.companyId != null ? String(u.companyId) : null,
+    companyName: u.companyName ?? undefined,
     avatarUrl: u.avatarUrl,
     createdBy: u.createdBy != null ? String(u.createdBy) : null,
     phoneNumber: u.phoneNumber ?? undefined,
@@ -52,6 +55,7 @@ function mapOffice(o: any): OfficeSettings {
     longitude: Number(o.longitude),
     radiusMeters: Number(o.radiusMeters),
     color: isHexColor(o.color) ? o.color : '#2196F3',
+    companyId: o.companyId != null ? String(o.companyId) : null,
     updatedAt: o.updatedAt,
   };
 }
@@ -67,6 +71,7 @@ function mapRecord(r: any): AttendanceRecord {
     status: r.status,
     date: r.date,
     clockInTime: r.clockInTime,
+    companyId: r.companyId != null ? String(r.companyId) : null,
     latitude: r.latitude,
     longitude: r.longitude,
     distanceMeters: r.distanceMeters,
@@ -182,6 +187,8 @@ export class AttendanceService {
     fullName: string;
     department?: string;
     createdBy?: string | null;
+    role?: 'employee' | 'admin';
+    companyId?: string | null;
   }): Promise<{ success: boolean; message: string }> {
     const cleanName = params.fullName.trim();
     const typedRaw = params.email.trim();
@@ -199,15 +206,17 @@ export class AttendanceService {
           email: authEmail,
           password: params.password,
           fullName: cleanName,
-          role: 'employee',
+          role: params.role || 'employee',
           department: params.department?.trim() || 'General',
+          companyId: params.companyId ?? undefined,
         },
       });
+      const label = params.role === 'admin' ? 'admin cabang' : 'karyawan';
       return {
         success: true,
         message: mapped
-          ? `Akun ${cleanName} (${typedRaw}) berhasil dibuat. Untuk masuk, ketik persis "${typedRaw}" + kata sandi yang didaftarkan.`
-          : `Akun ${cleanName} (${typedRaw}) berhasil dibuat.`,
+          ? `Akun ${label} ${cleanName} (${typedRaw}) berhasil dibuat. Untuk masuk, ketik persis "${typedRaw}" + kata sandi yang didaftarkan.`
+          : `Akun ${label} ${cleanName} (${typedRaw}) berhasil dibuat.`,
       };
     } catch (e: any) {
       return { success: false, message: e?.message || 'Gagal membuat akun. Periksa koneksi lalu coba lagi.' };
@@ -251,7 +260,7 @@ export class AttendanceService {
     }
   }
 
-  // Akun admin pertama: tanpa token bila DB masih kosong, login langsung bila sudah ada.
+  // Akun pertama (DB kosong): superadmin tanpa token, login langsung bila sudah ada.
   static async bootstrapInitialAdmin(): Promise<{ success: boolean; message: string; user?: UserProfile }> {
     const adminEmail = 'admin@admin.com';
     const adminPass = '123456';
@@ -262,8 +271,8 @@ export class AttendanceService {
         body: {
           email: adminEmail,
           password: adminPass,
-          fullName: 'Admin HR Presensi',
-          role: 'admin',
+          fullName: 'Superadmin Presensi',
+          role: 'superadmin',
           department: 'Human Capital',
         },
       });
@@ -399,9 +408,10 @@ export class AttendanceService {
     return currentOfficeSettings;
   }
 
-  static async getAllUsers(): Promise<UserProfile[]> {
+  static async getAllUsers(companyId?: string): Promise<UserProfile[]> {
     try {
-      const data = await apiFetch<{ users: any[] }>('/users');
+      const q = companyId ? `?company_id=${encodeURIComponent(companyId)}` : '';
+      const data = await apiFetch<{ users: any[] }>(`/users${q}`);
       if (!data.users) return [];
       return data.users.map(mapUser);
     } catch {
@@ -410,7 +420,7 @@ export class AttendanceService {
   }
 
   static async getTodayAttendances(): Promise<AttendanceRecord[]> {
-    const today = new Date().toISOString().split('T')[0];
+      const today = todayWIB();
     try {
       const data = await apiFetch<{ attendances: any[] }>(`/attendances?month=${today.slice(0, 7)}`);
       if (!data.attendances || data.attendances.length === 0) return [];
@@ -446,7 +456,7 @@ export class AttendanceService {
     documentUrl?: string;
   }): Promise<AttendanceRecord> {
     const now = new Date();
-    const today = now.toISOString().split('T')[0];
+        const today = todayWIB(now);
     const status = params.type === 'izin_sakit' ? 'izin' : 'hadir';
     const sType = params.sessionType || (params.type === 'izin_sakit' ? 'izin_sakit' : 'masuk');
 
@@ -480,12 +490,32 @@ export class AttendanceService {
   }
 
   static async getUserTodayStatus(userId: string): Promise<AttendanceRecord | null> {
-    const today = new Date().toISOString().split('T')[0];
+      const today = todayWIB();
     const recs = await this.getUserAttendances(userId);
     return recs.find((r) => r.date === today) || null;
   }
 
   /** Antrean pengajuan izin/sakit yang menunggu keputusan admin. */
+  static async getCompanies(): Promise<{ id: string; name: string }[]> {
+    try {
+      const data = await apiFetch<{ companies: any[] }>('/companies');
+      return (data.companies || []).map((c: any) => ({ id: String(c.id), name: c.name }));
+    } catch {
+      return [];
+    }
+  }
+
+  static async createCompany(name: string): Promise<{ success: boolean; message: string }> {
+    const trimmed = name.trim();
+    if (!trimmed) return { success: false, message: 'Nama PT tidak boleh kosong.' };
+    try {
+      await apiFetch('/companies', { method: 'POST', body: { name: trimmed } });
+      return { success: true, message: `PT ${trimmed} berhasil dibuat.` };
+    } catch (e: any) {
+      return { success: false, message: e?.message || 'Gagal membuat PT.' };
+    }
+  }
+
   static async getPendingApprovals(): Promise<AttendanceRecord[]> {
     try {
       const data = await apiFetch<{ attendances: any[] }>('/attendances?approval=pending');

@@ -38,9 +38,10 @@ function AppContent() {
   const [loading, setLoading] = useState(true);
   const [showProfilePage, setShowProfilePage] = useState(false);
   const { width } = useWindowDimensions();
+  const isAdminRole = (r?: string) => r === 'admin' || r === 'superadmin';
   // Di dashboard web admin sudah ada sidebar + topbar sendiri — header aplikasi disembunyikan
   const hideHeaderForWideAdmin =
-    !!currentUser && currentUser.role === 'admin' && Platform.OS === 'web' && width >= 768;
+    !!currentUser && isAdminRole(currentUser.role) && Platform.OS === 'web' && width >= 768;
 
   // Restore sesi login tersimpan (token JWT) saat aplikasi dibuka
   useEffect(() => {
@@ -87,7 +88,7 @@ function AppContent() {
       setUserHistory(history);
       setUserTodayStatus(today);
 
-      if (currentUser.role === 'admin') {
+      if (isAdminRole(currentUser.role)) {
         const users = await AttendanceService.getAllUsers();
         const attendances = await AttendanceService.getTodayAttendances();
         const pending = await AttendanceService.getPendingApprovals();
@@ -105,7 +106,7 @@ function AppContent() {
   };
 
   useEffect(() => {
-    if (!currentUser || currentUser.role !== 'admin') return;
+    if (!currentUser || !isAdminRole(currentUser.role)) return;
     const refreshAdminData = async () => {
       const offices = await AttendanceService.getOfficeList();
       setOfficeList(offices);
@@ -192,7 +193,7 @@ function AppContent() {
 
         {/* Main View */}
         <View style={styles.content}>
-          {currentUser.role === 'admin' ? (
+          {isAdminRole(currentUser.role) ? (
             <AdminDashboard
               currentAdmin={currentUser}
               users={allUsers}

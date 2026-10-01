@@ -13,13 +13,20 @@ CREATE DATABASE IF NOT EXISTS epresensi
 USE epresensi;
 
 -- 1. Users (pengganti public.profiles + auth.users)
+CREATE TABLE IF NOT EXISTS companies (
+  id INT AUTO_INCREMENT PRIMARY KEY,
+  name VARCHAR(255) NOT NULL UNIQUE,
+  created_at TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP
+) ENGINE=InnoDB;
+
 CREATE TABLE IF NOT EXISTS users (
   id INT AUTO_INCREMENT PRIMARY KEY,
   email VARCHAR(255) NOT NULL UNIQUE,
   password_hash VARCHAR(255) NOT NULL DEFAULT '',
   full_name VARCHAR(255) NOT NULL,
-  role ENUM('admin','employee') NOT NULL DEFAULT 'employee',
+  role ENUM('superadmin','admin','employee') NOT NULL DEFAULT 'employee',
   department VARCHAR(100) NOT NULL DEFAULT 'General',
+  company_id INT NULL,
   avatar_url TEXT NULL,
   phone_number VARCHAR(30) NULL,
   device_model VARCHAR(100) NULL,
@@ -38,6 +45,7 @@ CREATE TABLE IF NOT EXISTS office_settings (
   longitude DOUBLE NOT NULL DEFAULT 106.8456,
   radius_meters INT NOT NULL DEFAULT 150,
   color VARCHAR(7) NOT NULL DEFAULT '#2196F3',
+  company_id INT NULL,
   updated_at TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP
     ON UPDATE CURRENT_TIMESTAMP
 ) ENGINE=InnoDB;
@@ -67,6 +75,7 @@ CREATE TABLE IF NOT EXISTS attendances (
   reviewed_by INT NULL,
   reviewed_at TIMESTAMP NULL,
   review_note TEXT NULL,
+  company_id INT NULL,
   created_at TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP,
   CONSTRAINT fk_att_user FOREIGN KEY (user_id)
     REFERENCES users(id) ON DELETE CASCADE,

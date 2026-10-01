@@ -76,6 +76,8 @@ export const AdminEmployeeManager: React.FC<AdminEmployeeManagerProps> = ({
       password,
       fullName: fullName.trim(),
       department: department.trim() || 'General',
+      role: 'employee',
+      companyId: currentAdmin.companyId ?? null,
       createdBy: currentAdmin.id,
     });
     setLoading(false);
