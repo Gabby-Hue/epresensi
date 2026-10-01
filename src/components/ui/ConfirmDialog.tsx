@@ -1,3 +1,6 @@
+// E-Presensi UI · Modern Shadcn Confirm Dialog
+// Clean hairline borders, soft overlay backdrop, accessible buttons.
+
 import React from 'react';
 import {
   Modal,
@@ -8,8 +11,8 @@ import {
   View,
 } from 'react-native';
 import { Feather } from '@expo/vector-icons';
-import { Button } from './Button';
-import { colors, fontSize, radius, spacing } from '../../theme';
+import { colors, fontSize, neoShadow, radius, spacing } from '../../theme';
+import { tap } from '../../services/feedbackService';
 
 interface ConfirmDialogProps {
   visible: boolean;
@@ -46,16 +49,16 @@ export const ConfirmDialog: React.FC<ConfirmDialogProps> = ({
       <TouchableWithoutFeedback onPress={onClose}>
         <View style={styles.backdrop}>
           <TouchableWithoutFeedback>
-            <View style={styles.card}>
+            <View style={[styles.card, neoShadow.lg]}>
               <View
                 style={[
-                  styles.iconCircle,
-                  variant === 'danger' ? styles.dangerIconCircle : styles.primaryIconCircle,
+                  styles.iconBox,
+                  variant === 'danger' ? styles.dangerIconBox : styles.primaryIconBox,
                 ]}
               >
                 <Feather
                   name={icon}
-                  size={28}
+                  size={24}
                   color={variant === 'danger' ? colors.danger : colors.primary}
                 />
               </View>
@@ -67,7 +70,10 @@ export const ConfirmDialog: React.FC<ConfirmDialogProps> = ({
                 {!singleButton && (
                   <TouchableOpacity
                     activeOpacity={0.8}
-                    onPress={onClose}
+                    onPress={() => {
+                      tap();
+                      onClose();
+                    }}
                     style={styles.cancelBtn}
                   >
                     <Text style={styles.cancelText}>{cancelText}</Text>
@@ -77,6 +83,7 @@ export const ConfirmDialog: React.FC<ConfirmDialogProps> = ({
                 <TouchableOpacity
                   activeOpacity={0.8}
                   onPress={() => {
+                    tap();
                     onClose();
                     onConfirm();
                   }}
@@ -100,38 +107,35 @@ export const ConfirmDialog: React.FC<ConfirmDialogProps> = ({
 const styles = StyleSheet.create({
   backdrop: {
     flex: 1,
-    backgroundColor: 'rgba(12, 27, 42, 0.55)',
+    backgroundColor: 'rgba(15, 23, 42, 0.45)',
     alignItems: 'center',
     justifyContent: 'center',
     padding: spacing.lg,
   },
   card: {
     width: '100%',
-    maxWidth: 360,
+    maxWidth: 380,
     backgroundColor: colors.surface,
-    borderRadius: radius.lg,
-    paddingHorizontal: 20,
+    borderRadius: radius.xl,
+    paddingHorizontal: 22,
     paddingTop: 24,
-    paddingBottom: 20,
+    paddingBottom: 22,
     alignItems: 'center',
-    shadowColor: '#000',
-    shadowOffset: { width: 0, height: 8 },
-    shadowOpacity: 0.2,
-    shadowRadius: 20,
-    elevation: 12,
+    borderWidth: 1,
+    borderColor: colors.border,
   },
-  iconCircle: {
-    width: 60,
-    height: 60,
-    borderRadius: 30,
+  iconBox: {
+    width: 52,
+    height: 52,
+    borderRadius: radius.full,
     alignItems: 'center',
     justifyContent: 'center',
     marginBottom: 16,
   },
-  dangerIconCircle: {
+  dangerIconBox: {
     backgroundColor: colors.dangerSoft,
   },
-  primaryIconCircle: {
+  primaryIconBox: {
     backgroundColor: colors.primarySoft,
   },
   title: {
@@ -140,6 +144,7 @@ const styles = StyleSheet.create({
     color: colors.ink,
     textAlign: 'center',
     marginBottom: 8,
+    letterSpacing: -0.2,
   },
   message: {
     fontSize: fontSize.sm,
@@ -148,6 +153,7 @@ const styles = StyleSheet.create({
     lineHeight: 22,
     marginBottom: 24,
     paddingHorizontal: 8,
+    fontWeight: '500',
   },
   buttonRow: {
     flexDirection: 'row',
@@ -156,22 +162,22 @@ const styles = StyleSheet.create({
   },
   cancelBtn: {
     flex: 1,
-    paddingVertical: 14,
+    paddingVertical: 12,
     alignItems: 'center',
     justifyContent: 'center',
     borderRadius: radius.md,
-    backgroundColor: colors.surfaceSoft,
+    backgroundColor: colors.surface,
     borderWidth: 1,
     borderColor: colors.borderStrong,
   },
   cancelText: {
     fontSize: fontSize.sm,
-    fontWeight: '700',
+    fontWeight: '600',
     color: colors.ink,
   },
   confirmBtn: {
     flex: 1,
-    paddingVertical: 14,
+    paddingVertical: 12,
     alignItems: 'center',
     justifyContent: 'center',
     borderRadius: radius.md,
@@ -180,14 +186,14 @@ const styles = StyleSheet.create({
     width: '100%',
   },
   dangerConfirmBtn: {
-    backgroundColor: '#DC2626',
+    backgroundColor: colors.danger,
   },
   primaryConfirmBtn: {
     backgroundColor: colors.primary,
   },
   confirmText: {
     fontSize: fontSize.sm,
-    fontWeight: '700',
+    fontWeight: '600',
     color: '#FFFFFF',
   },
 });

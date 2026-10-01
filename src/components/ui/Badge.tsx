@@ -1,3 +1,6 @@
+// E-Presensi UI · Modern Shadcn Badge
+// Clean semantic pill badge with soft pastel tones, clear typography, and subtle border.
+
 import React from 'react';
 import { StyleSheet, Text, View } from 'react-native';
 import { colors, fontSize, radius } from '../../theme';
@@ -12,28 +15,26 @@ export const Badge: React.FC<BadgeProps> = ({ type, label, size = 'md' }) => {
   const config = (() => {
     switch (type) {
       case 'luring':
-        return { bg: colors.masukSoft, text: colors.masuk, label: 'Kantor' };
       case 'hadir':
-        return { bg: colors.masukSoft, text: colors.masuk, label: 'Hadir' };
+        return { bg: colors.masukSoft, text: colors.primaryDark, border: colors.masukBorder, label: 'Kantor' };
       case 'daring':
-        return { bg: colors.surfaceSoft, text: colors.muted, label: 'Dari rumah' };
+        return { bg: colors.surfaceSoft, text: colors.ink, border: colors.border, label: 'Dari Rumah' };
       case 'izin_sakit':
-        return { bg: colors.izinSoft, text: colors.izin, label: 'Izin / Sakit' };
       case 'izin':
-        return { bg: colors.izinSoft, text: colors.izin, label: 'Izin' };
       case 'sakit':
-        return { bg: colors.izinSoft, text: colors.izin, label: 'Sakit' };
+        return { bg: colors.izinSoft, text: colors.dangerInk, border: colors.izinBorder, label: type === 'sakit' ? 'Sakit' : 'Izin' };
       case 'menunggu':
-        return { bg: '#FEF3C7', text: '#B45309', label: 'Menunggu' };
+        return { bg: colors.warningSoft, text: colors.warningInk, border: colors.secondaryBorder, label: 'Menunggu' };
       case 'ditolak':
-        return { bg: '#E2E8F0', text: '#475569', label: 'Ditolak' };
+        return { bg: colors.surfaceSoft, text: colors.muted, border: colors.border, label: 'Ditolak' };
       default:
-        return { bg: colors.surfaceSoft, text: colors.muted, label: 'Belum absen' };
+        return { bg: colors.surfaceSoft, text: colors.muted, border: colors.border, label: 'Belum Absen' };
     }
   })();
+
   const isSm = size === 'sm';
   return (
-    <View style={[styles.badge, { backgroundColor: config.bg }, isSm ? styles.sm : styles.md]}>
+    <View style={[styles.badge, { backgroundColor: config.bg, borderColor: config.border }, isSm ? styles.sm : styles.md]}>
       <Text style={[styles.text, { color: config.text }, isSm && styles.textSm]}>
         {label || config.label}
       </Text>
@@ -42,9 +43,25 @@ export const Badge: React.FC<BadgeProps> = ({ type, label, size = 'md' }) => {
 };
 
 const styles = StyleSheet.create({
-  badge: { borderRadius: radius.sm, alignSelf: 'flex-start' },
-  md: { paddingHorizontal: 12, paddingVertical: 7 },
-  sm: { paddingHorizontal: 10, paddingVertical: 5 },
-  text: { fontWeight: '700', fontSize: fontSize.sm },
-  textSm: { fontSize: fontSize.xs },
+  badge: {
+    borderRadius: radius.sm,
+    borderWidth: 1,
+    alignSelf: 'flex-start',
+  },
+  md: {
+    paddingHorizontal: 8,
+    paddingVertical: 2.5,
+  },
+  sm: {
+    paddingHorizontal: 6,
+    paddingVertical: 1.5,
+  },
+  text: {
+    fontWeight: '600',
+    fontSize: fontSize.xs,
+    letterSpacing: -0.1,
+  },
+  textSm: {
+    fontSize: 11,
+  },
 });

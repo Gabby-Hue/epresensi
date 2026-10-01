@@ -1,0 +1,376 @@
+<!DOCTYPE html>
+
+<html lang="en"><head><meta charset="utf-8"/><meta content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no, viewport-fit=cover" name="viewport"/><meta content="mobile_tab" name="shell-type"/><link href="https://fonts.googleapis.com" rel="preconnect"/><link crossorigin="" href="https://fonts.gstatic.com" rel="preconnect"/><link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;600&amp;display=swap" rel="stylesheet"/><link href="https://fonts.googleapis.com/css2?family=Material+Symbols+Outlined:opsz,wght,FILL,GRAD@20..48,100..700,0..1,-50..200" rel="stylesheet"/>
+<link href="https://fonts.googleapis.com/css2?family=Material+Symbols+Outlined:wght,FILL@100..700,0..1&amp;display=swap" rel="stylesheet"/><script src="https://cdn.tailwindcss.com"></script><script id="tailwind-config">tailwind.config={darkMode:"class",theme:{extend:{colors:{"tertiary":"#a73a00","secondary-fixed":"#d4e3ff","surface-container-highest":"#d3e4fd","on-secondary":"#ffffff","on-primary":"#ffffff","surface-variant":"#d3e4fd","surface-container":"#e5eeff","surface-tint":"#0061a4","error":"#ba1a1a","on-tertiary-fixed-variant":"#7f2b00","surface-container-lowest":"#ffffff","primary-container":"#2196f3","on-error-container":"#93000a","on-primary-fixed-variant":"#00497d","primary-fixed":"#d1e4ff","on-primary-fixed":"#001d36","on-error":"#ffffff","background":"#f8f9ff","inverse-primary":"#9ecaff","on-secondary-fixed-variant":"#004786","surface-bright":"#f8f9ff","surface-container-high":"#dbe9ff","tertiary-fixed-dim":"#ffb599","secondary-fixed-dim":"#a5c8ff","outline":"#707883","surface":"#f8f9ff","on-primary-container":"#002c4f","secondary":"#005faf","on-background":"#0b1c2f","surface-container-low":"#eef4ff","tertiary-container":"#f86219","secondary-container":"#54a0fe","surface-dim":"#cbdbf4","outline-variant":"#bfc7d4","inverse-on-surface":"#eaf1ff","tertiary-fixed":"#ffdbce","error-container":"#ffdad6","on-secondary-container":"#003567","on-surface":"#0b1c2f","primary":"#0061a4","on-surface-variant":"#404752","on-secondary-fixed":"#001c3a","primary-fixed-dim":"#9ecaff","on-tertiary":"#ffffff","inverse-surface":"#213144","on-tertiary-container":"#511800","on-tertiary-fixed":"#370e00"},borderRadius:{"DEFAULT":"0.25rem","lg":"0.5rem","xl":"0.75rem","full":"9999px"},spacing:{"space-xl":"2rem","margin":"2rem","space-xs":"0.25rem","space-md":"1rem","margin-mobile":"1rem","gutter":"1rem","gutter-mobile":"0.75rem","space-lg":"1.5rem","space-sm":"0.5rem"},fontFamily:{"label-lg":["Inter"],"headline-sm":["Inter"],"headline-xl":["Inter"],"headline-xl-mobile":["Inter"],"label-md":["Inter"],"label-sm":["Inter"],"body-sm":["Inter"],"mono-numeric":["Inter"],"headline-md":["Inter"],"body-md":["Inter"],"body-lg":["Inter"],"headline-lg":["Inter"]},fontSize:{"label-lg":["14px",{lineHeight:"20px",letterSpacing:"0.01em",fontWeight:"600"}],"headline-sm":["16px",{lineHeight:"24px",letterSpacing:"-0.005em",fontWeight:"600"}],"headline-xl":["32px",{lineHeight:"40px",letterSpacing:"-0.02em",fontWeight:"600"}],"headline-xl-mobile":["26px",{lineHeight:"34px",letterSpacing:"-0.015em",fontWeight:"600"}],"label-md":["12px",{lineHeight:"16px",letterSpacing:"0.02em",fontWeight:"600"}],"label-sm":["11px",{lineHeight:"14px",letterSpacing:"0.04em",fontWeight:"600"}],"body-sm":["12px",{lineHeight:"16px",fontWeight:"400"}],"mono-numeric":["18px",{lineHeight:"24px",letterSpacing:"-0.01em",fontWeight:"600"}],"headline-md":["20px",{lineHeight:"28px",letterSpacing:"-0.01em",fontWeight:"600"}],"body-md":["14px",{lineHeight:"20px",fontWeight:"400"}],"body-lg":["16px",{lineHeight:"24px",fontWeight:"400"}],"headline-lg":["24px",{lineHeight:"32px",letterSpacing:"-0.015em",fontWeight:"600"}]}}}};</script><style>@layer base{html,body{width:100%;margin:0;padding:0;}body{overscroll-behavior-y:none;font-family:'Inter',sans-serif;}.pb-safe{padding-bottom:env(safe-area-inset-bottom,0px);}.pt-safe{padding-top:env(safe-area-inset-top,0px);}}::-webkit-scrollbar{display:none;}</style><style>
+    body {
+      min-height: max(884px, 100dvh);
+    }
+  </style>
+  </head><body class="bg-background text-on-surface antialiased flex flex-col min-h-screen"><header class="fixed top-0 w-full z-50 bg-surface-container-lowest/90 backdrop-blur-xl shadow-[0_1px_8px_rgba(0,0,0,0.04)] pt-safe"><div class="h-16 px-margin-mobile flex items-center justify-between"><div class="flex items-center gap-space-sm"><div class="flex flex-col"><div class="flex items-center gap-space-xs"><span class="font-headline-sm text-headline-sm text-on-surface">E-Presensi</span><span class="px-1.5 py-0.5 rounded bg-surface-container text-on-primary-fixed-variant font-label-sm text-label-sm">PT Astra Ventura</span></div><span class="font-label-sm text-label-sm text-on-surface-variant">Employee Manager</span></div></div><div class="flex items-center gap-space-xs"><button class="w-11 h-11 flex items-center justify-center relative text-on-surface-variant hover:text-on-surface rounded-full transition-colors" type="button"><span class="material-symbols-outlined text-[22px]">notifications</span><span class="absolute top-2.5 right-2.5 w-2 h-2 rounded-full bg-tertiary-container ring-2 ring-surface-container-lowest"></span></button><div class="relative flex items-center justify-center p-0.5"><img alt="Profile" class="w-8 h-8 rounded-full object-cover" src="https://lh3.googleusercontent.com/aida/AEtjO1XgGrj-NTj2cjpIVWutcNK2Y5DTNqPkVVOnCbwjLsAlrWMprWUTnWUMzR-iP-Nj43_oaXapxAwdcwVjWpDOHQ5YmMoppxkWcLr7vZsDfDSPmxvwl5q62gCXvYaj14PQlL1DppO0l3nZOf9nuk1iY5z-s5pudFSxZzxJL_Z8FGqlMRNw24DZm539x6UXQw4aVZJ4U-zapxHg-3jReTjpYkD-tt1J9TpyWWtYzhJvDmifCcBdoYowfn8PFL5U"/><span class="absolute bottom-0 right-0 w-2.5 h-2.5 rounded-full bg-primary-container ring-2 ring-surface-container-lowest"></span></div></div></div></header><main class="flex-1 flex flex-col relative w-full pt-16 pb-24 bg-background"><div class="flex flex-col w-full">
+<section class="px-margin-mobile pt-space-md pb-space-sm">
+<div class="bg-surface-container-low rounded-xl p-space-md shadow-sm">
+<div class="flex items-center gap-space-xs">
+<span class="material-symbols-outlined text-primary text-[20px]">manage_accounts</span>
+<h1 class="font-headline-sm text-headline-sm text-on-surface">Manajemen Karyawan &amp; Departemen</h1>
+</div>
+<p class="font-body-sm text-body-sm text-on-surface-variant mt-1">
+        Kelola akun pengguna, penugasan divisi, dan kunci perangkat keras (Hardware Lock).
+      </p>
+</div>
+</section>
+<section class="px-margin-mobile py-space-xs">
+<div class="bg-surface-container-lowest rounded-xl shadow-md p-space-md flex flex-col gap-space-md">
+<div class="flex items-center justify-between">
+<div class="flex items-center gap-space-xs">
+<div class="w-8 h-8 rounded-lg bg-surface-container flex items-center justify-center text-primary">
+<span class="material-symbols-outlined text-[18px]">person_add</span>
+</div>
+<div>
+<h2 class="font-headline-sm text-headline-sm text-on-surface">Tambah Akun Karyawan</h2>
+<p class="font-label-sm text-label-sm text-on-surface-variant">Registrasi identitas resmi Astra Ventura</p>
+</div>
+</div>
+<span class="px-2 py-0.5 rounded-full bg-surface-container text-primary font-label-sm text-label-sm">Wajib NIK</span>
+</div>
+<form class="flex flex-col gap-space-sm" id="add-employee-form" onsubmit="event.preventDefault();">
+<div class="flex flex-col gap-1">
+<label class="font-label-md text-label-md text-on-surface" for="emp-name">Nama Lengkap</label>
+<div class="relative flex items-center">
+<input class="w-full h-[52px] px-3.5 rounded-lg bg-surface-container-low text-on-surface font-body-md text-body-md focus:bg-surface-container-lowest focus:outline-none transition-colors" id="emp-name" placeholder="contoh: Raditya Pratama, S.T." type="text"/>
+</div>
+</div>
+<div class="flex flex-col gap-1">
+<label class="font-label-md text-label-md text-on-surface" for="emp-email">Email Perusahaan</label>
+<div class="relative flex items-center">
+<input class="w-full h-[52px] px-3.5 rounded-lg bg-surface-container-low text-on-surface font-body-md text-body-md focus:bg-surface-container-lowest focus:outline-none transition-colors" id="emp-email" placeholder="raditya.p@astragroup.co.id" type="email"/>
+</div>
+</div>
+<div class="flex flex-col gap-1">
+<label class="font-label-md text-label-md text-on-surface" for="emp-pass">Kata Sandi Sementara</label>
+<div class="relative flex items-center">
+<input class="w-full h-[52px] pl-3.5 pr-12 rounded-lg bg-surface-container-low text-on-surface font-body-md text-body-md focus:bg-surface-container-lowest focus:outline-none transition-colors" id="emp-pass" type="password" value="AstraVentura@2025"/>
+<button aria-label="Tampilkan sandi" class="absolute right-3 w-8 h-8 flex items-center justify-center text-on-surface-variant hover:text-on-surface rounded-full" id="toggle-password-btn" type="button">
+<span class="material-symbols-outlined text-[20px]" id="toggle-password-icon">visibility</span>
+</button>
+</div>
+</div>
+<div class="flex flex-col gap-1">
+<div class="flex items-center justify-between">
+<label class="font-label-md text-label-md text-on-surface">Pilih Departemen</label>
+<span class="font-label-sm text-label-sm text-on-surface-variant">Terpilih: Drafter</span>
+</div>
+<div class="relative">
+<button class="w-full h-[52px] px-3.5 rounded-lg bg-surface-container-low text-on-surface flex items-center justify-between font-body-md text-body-md shadow-sm text-left" id="dept-selector" type="button">
+<div class="flex items-center gap-space-xs">
+<span class="material-symbols-outlined text-primary text-[18px]">business_center</span>
+<span class="font-headline-sm text-headline-sm text-on-surface" id="selected-dept-label">Drafter</span>
+</div>
+<span class="material-symbols-outlined text-on-surface-variant text-[20px]">keyboard_arrow_down</span>
+</button>
+<div class="mt-2 w-full bg-surface-container-lowest rounded-xl shadow-xl overflow-hidden p-2 flex flex-col gap-1" id="dept-dropdown-panel">
+<div class="px-2 py-1 text-on-surface-variant font-label-sm text-label-sm">Divisi Terdaftar</div>
+<button class="dept-item w-full px-3 py-2 rounded-lg flex items-center justify-between hover:bg-surface-container-low transition-colors text-left" data-value="Sales" type="button">
+<span class="font-body-md text-body-md text-on-surface">Sales</span>
+</button>
+<button class="dept-item w-full px-3 py-2 rounded-lg flex items-center justify-between hover:bg-surface-container-low transition-colors text-left" data-value="IT &amp; DevOps" type="button">
+<span class="font-body-md text-body-md text-on-surface">IT &amp; DevOps</span>
+</button>
+<button class="dept-item w-full px-3 py-2 rounded-lg flex items-center justify-between bg-surface-container text-on-surface transition-colors text-left" data-value="Drafter" type="button">
+<span class="font-headline-sm text-headline-sm text-primary">Drafter</span>
+<span class="material-symbols-outlined text-primary text-[20px]">check</span>
+</button>
+<button class="dept-item w-full px-3 py-2 rounded-lg flex items-center justify-between hover:bg-surface-container-low transition-colors text-left" data-value="Human Capital" type="button">
+<span class="font-body-md text-body-md text-on-surface">Human Capital</span>
+</button>
+<button class="dept-item w-full px-3 py-2 rounded-lg flex items-center justify-between hover:bg-surface-container-low transition-colors text-left" data-value="Marketing" type="button">
+<span class="font-body-md text-body-md text-on-surface">Marketing</span>
+</button>
+<div class="pt-2 mt-1 bg-surface-container-low rounded-lg p-2.5 flex flex-col gap-2">
+<button class="w-full flex items-center justify-center gap-1.5 text-primary font-label-md text-label-md py-1" id="show-inline-dept-btn" type="button">
+<span class="material-symbols-outlined text-[18px]">add_circle</span>
+<span>+ Tambah Departemen Baru</span>
+</button>
+<div class="flex flex-col gap-2 pt-1" id="inline-dept-form">
+<div class="flex gap-2 items-center">
+<input class="flex-1 h-[40px] px-3 rounded-lg bg-surface-container-lowest text-on-surface font-body-sm text-body-sm focus:outline-none" id="new-dept-input" placeholder="Nama Departemen Baru..." type="text"/>
+<button class="h-[40px] px-3.5 rounded-lg bg-primary text-on-primary font-label-md text-label-md shadow-sm active:scale-95 transition-transform" id="save-new-dept-btn" type="button">
+                      Simpan
+                    </button>
+</div>
+<p class="font-label-sm text-label-sm text-on-surface-variant">Departemen otomatis tersedia untuk opsi penugasan</p>
+</div>
+</div>
+</div>
+</div>
+</div>
+<button class="mt-space-xs w-full h-[52px] rounded-lg bg-primary text-on-primary font-label-lg text-label-lg shadow-md hover:bg-secondary active:scale-[0.99] transition-all flex items-center justify-center gap-2" type="submit">
+<span class="material-symbols-outlined text-[20px]">how_to_reg</span>
+<span>Daftarkan Karyawan Baru</span>
+</button>
+</form>
+</div>
+</section>
+<section class="px-margin-mobile pt-space-lg pb-space-sm">
+<div class="flex flex-col gap-space-sm">
+<div class="flex items-center justify-between">
+<div>
+<h2 class="font-headline-sm text-headline-sm text-on-surface">Direktori Karyawan</h2>
+<span class="font-label-sm text-label-sm text-on-surface-variant">3 dari 48 Personel Ditampilkan</span>
+</div>
+<button class="flex items-center gap-1 px-2.5 py-1 rounded-full bg-surface-container text-on-surface font-label-sm text-label-sm" type="button">
+<span class="material-symbols-outlined text-[16px]">tune</span>
+<span>Filter Lanjutan</span>
+</button>
+</div>
+<div class="relative flex items-center">
+<span class="material-symbols-outlined absolute left-3.5 text-on-surface-variant text-[20px]">search</span>
+<input class="w-full h-[46px] pl-10 pr-3.5 rounded-lg bg-surface-container-low text-on-surface font-body-md text-body-md focus:bg-surface-container-lowest focus:outline-none shadow-sm" id="search-input" placeholder="Cari nama, NIK, atau serial HP..." type="text"/>
+</div>
+<div class="flex items-center gap-2 overflow-x-auto py-1">
+<button class="filter-chip px-3 py-1.5 rounded-full bg-primary text-on-primary font-label-sm text-label-sm whitespace-nowrap shadow-sm" type="button">
+          Semua (48)
+        </button>
+<button class="filter-chip px-3 py-1.5 rounded-full bg-surface-container-low text-on-surface-variant font-label-sm text-label-sm whitespace-nowrap hover:bg-surface-container" type="button">
+          Drafter (12)
+        </button>
+<button class="filter-chip px-3 py-1.5 rounded-full bg-surface-container-low text-on-surface-variant font-label-sm text-label-sm whitespace-nowrap hover:bg-surface-container" type="button">
+          IT (9)
+        </button>
+<button class="filter-chip px-3 py-1.5 rounded-full bg-surface-container-low text-on-surface-variant font-label-sm text-label-sm whitespace-nowrap hover:bg-surface-container" type="button">
+          Sales (14)
+        </button>
+</div>
+</div>
+</section>
+<section class="px-margin-mobile py-space-xs flex flex-col gap-space-sm">
+<div class="bg-surface-container-lowest rounded-xl shadow-sm p-space-md flex flex-col gap-space-sm">
+<div class="flex items-start justify-between gap-2">
+<div class="flex items-center gap-space-xs">
+<div class="w-10 h-10 rounded-full bg-surface-container flex items-center justify-center text-primary font-headline-sm text-headline-sm">
+            BD
+          </div>
+<div>
+<div class="flex items-center gap-1.5">
+<span class="font-headline-sm text-headline-sm text-on-surface">Bagas Dananjaya</span>
+<span class="px-2 py-0.5 rounded-full bg-surface-container text-primary font-label-sm text-label-sm">Drafter</span>
+</div>
+<span class="font-body-sm text-body-sm text-on-surface-variant">NIK: EP-84920</span>
+</div>
+</div>
+</div>
+<div class="bg-surface-container-low rounded-lg p-2.5 flex items-center justify-between">
+<div class="flex items-center gap-2">
+<span class="material-symbols-outlined text-secondary text-[18px]">lock</span>
+<span class="font-label-sm text-label-sm text-on-surface">Terkunci: Samsung Galaxy S23 (Knox Sec)</span>
+</div>
+<span class="w-2 h-2 rounded-full bg-primary"></span>
+</div>
+<div class="flex items-center justify-end gap-1.5 pt-1">
+<button aria-label="Kalender Presensi Bagas Dananjaya" class="w-10 h-10 rounded-lg bg-surface-container-low text-on-surface hover:bg-surface-container flex items-center justify-center" title="Kalender Presensi" type="button">
+<span class="material-symbols-outlined text-[20px]">calendar_month</span>
+</button>
+<button aria-label="Reset Kunci Hardware Bagas Dananjaya" class="w-10 h-10 rounded-lg bg-surface-container-low text-on-surface hover:bg-surface-container flex items-center justify-center" title="Reset Kunci Hardware" type="button">
+<span class="material-symbols-outlined text-[20px]">phonelink_erase</span>
+</button>
+<button aria-label="Edit Akun Bagas Dananjaya" class="w-10 h-10 rounded-lg bg-surface-container-low text-on-surface hover:bg-surface-container flex items-center justify-center" title="Edit Data" type="button">
+<span class="material-symbols-outlined text-[20px]">edit</span>
+</button>
+<button aria-label="Hapus Akun Bagas Dananjaya" class="w-10 h-10 rounded-lg bg-error-container text-on-error-container hover:opacity-90 flex items-center justify-center" id="delete-bagas-btn" title="Hapus Akun" type="button">
+<span class="material-symbols-outlined text-[20px]">delete</span>
+</button>
+</div>
+</div>
+<div class="bg-surface-container-lowest rounded-xl shadow-sm p-space-md flex flex-col gap-space-sm">
+<div class="flex items-start justify-between gap-2">
+<div class="flex items-center gap-space-xs">
+<div class="w-10 h-10 rounded-full bg-surface-container flex items-center justify-center text-primary font-headline-sm text-headline-sm">
+            SN
+          </div>
+<div>
+<div class="flex items-center gap-1.5">
+<span class="font-headline-sm text-headline-sm text-on-surface">Siti Nurhaliza</span>
+<span class="px-2 py-0.5 rounded-full bg-surface-container text-primary font-label-sm text-label-sm">Human Capital</span>
+</div>
+<span class="font-body-sm text-body-sm text-on-surface-variant">NIK: EP-84921</span>
+</div>
+</div>
+</div>
+<div class="bg-surface-container-low rounded-lg p-2.5 flex items-center justify-between">
+<div class="flex items-center gap-2">
+<span class="material-symbols-outlined text-secondary text-[18px]">lock</span>
+<span class="font-label-sm text-label-sm text-on-surface">Terkunci: iPhone 14 Pro</span>
+</div>
+<span class="w-2 h-2 rounded-full bg-primary"></span>
+</div>
+<div class="flex items-center justify-end gap-1.5 pt-1">
+<button aria-label="Kalender Presensi Siti Nurhaliza" class="w-10 h-10 rounded-lg bg-surface-container-low text-on-surface hover:bg-surface-container flex items-center justify-center" title="Kalender Presensi" type="button">
+<span class="material-symbols-outlined text-[20px]">calendar_month</span>
+</button>
+<button aria-label="Reset Kunci Hardware Siti Nurhaliza" class="w-10 h-10 rounded-lg bg-surface-container-low text-on-surface hover:bg-surface-container flex items-center justify-center" title="Reset Kunci Hardware" type="button">
+<span class="material-symbols-outlined text-[20px]">phonelink_erase</span>
+</button>
+<button aria-label="Edit Akun Siti Nurhaliza" class="w-10 h-10 rounded-lg bg-surface-container-low text-on-surface hover:bg-surface-container flex items-center justify-center" title="Edit Data" type="button">
+<span class="material-symbols-outlined text-[20px]">edit</span>
+</button>
+<button aria-label="Hapus Akun Siti Nurhaliza" class="w-10 h-10 rounded-lg bg-error-container text-on-error-container hover:opacity-90 flex items-center justify-center" title="Hapus Akun" type="button">
+<span class="material-symbols-outlined text-[20px]">delete</span>
+</button>
+</div>
+</div>
+<div class="bg-surface-container-lowest rounded-xl shadow-sm p-space-md flex flex-col gap-space-sm">
+<div class="flex items-start justify-between gap-2">
+<div class="flex items-center gap-space-xs">
+<div class="w-10 h-10 rounded-full bg-surface-container flex items-center justify-center text-primary font-headline-sm text-headline-sm">
+            KA
+          </div>
+<div>
+<div class="flex items-center gap-1.5">
+<span class="font-headline-sm text-headline-sm text-on-surface">Kevin Ardiansyah</span>
+<span class="px-2 py-0.5 rounded-full bg-surface-container text-primary font-label-sm text-label-sm">IT</span>
+</div>
+<span class="font-body-sm text-body-sm text-on-surface-variant">NIK: EP-84922</span>
+</div>
+</div>
+</div>
+<div class="bg-tertiary-fixed rounded-lg p-2.5 flex items-center justify-between">
+<div class="flex items-center gap-2 text-on-tertiary-fixed-variant">
+<span class="material-symbols-outlined text-[18px]">warning</span>
+<span class="font-label-sm text-label-sm">Kunci Perangkat: Belum Terikat (Perlu Login)</span>
+</div>
+<span class="material-symbols-outlined text-tertiary text-[18px]">lock_open</span>
+</div>
+<div class="flex items-center justify-end gap-1.5 pt-1">
+<button aria-label="Setup Hardware Kevin Ardiansyah" class="h-10 px-3 rounded-lg bg-surface-container text-primary font-label-sm text-label-sm hover:bg-surface-container-high flex items-center justify-center gap-1" title="Setup Kunci Hardware" type="button">
+<span class="material-symbols-outlined text-[18px]">phonelink_setup</span>
+<span>Setup Kunci</span>
+</button>
+<button aria-label="Edit Akun Kevin Ardiansyah" class="w-10 h-10 rounded-lg bg-surface-container-low text-on-surface hover:bg-surface-container flex items-center justify-center" title="Edit Data" type="button">
+<span class="material-symbols-outlined text-[20px]">edit</span>
+</button>
+<button aria-label="Hapus Akun Kevin Ardiansyah" class="w-10 h-10 rounded-lg bg-error-container text-on-error-container hover:opacity-90 flex items-center justify-center" title="Hapus Akun" type="button">
+<span class="material-symbols-outlined text-[20px]">delete</span>
+</button>
+</div>
+</div>
+</section>
+<div class="fixed inset-0 z-50 bg-inverse-surface/40 backdrop-blur-sm flex items-end justify-center px-margin-mobile pb-safe" id="delete-modal-backdrop">
+<div class="w-full max-w-md bg-surface-container-lowest rounded-2xl shadow-xl p-space-md mb-4 flex flex-col gap-space-md">
+<div class="w-9 h-1 rounded-full bg-outline-variant self-center"></div>
+<div class="flex items-start gap-3">
+<div class="w-10 h-10 rounded-full bg-error-container flex items-center justify-center text-error flex-shrink-0">
+<span class="material-symbols-outlined text-[22px]">warning</span>
+</div>
+<div class="flex flex-col gap-1">
+<h3 class="font-headline-sm text-headline-sm text-on-surface">Konfirmasi Penghapusan Akun</h3>
+<p class="font-body-sm text-body-sm text-on-surface-variant">
+            Hapus akun <strong class="text-on-surface">Bagas Dananjaya</strong>? Riwayat presensi akan diarsipkan secara permanen.
+          </p>
+</div>
+</div>
+<div class="grid grid-cols-2 gap-space-xs pt-1">
+<button class="h-[48px] rounded-lg bg-surface-container text-on-surface font-label-md text-label-md active:bg-surface-container-high transition-colors" id="cancel-delete-btn" type="button">
+          Batal
+        </button>
+<button class="h-[48px] rounded-lg bg-error text-on-error font-label-md text-label-md active:opacity-90 shadow-md transition-opacity flex items-center justify-center gap-1.5" id="confirm-delete-btn" type="button">
+<span class="material-symbols-outlined text-[18px]">delete</span>
+<span>Hapus Akun</span>
+</button>
+</div>
+</div>
+</div>
+<script>
+    (function () {
+      const passInput = document.getElementById('emp-pass');
+      const togglePassBtn = document.getElementById('toggle-password-btn');
+      const togglePassIcon = document.getElementById('toggle-password-icon');
+
+      if (togglePassBtn && passInput && togglePassIcon) {
+        togglePassBtn.addEventListener('click', function () {
+          const isPassword = passInput.type === 'password';
+          passInput.type = isPassword ? 'text' : 'password';
+          togglePassIcon.textContent = isPassword ? 'visibility_off' : 'visibility';
+        });
+      }
+
+      const deptSelector = document.getElementById('dept-selector');
+      const deptDropdown = document.getElementById('dept-dropdown-panel');
+      const deptLabel = document.getElementById('selected-dept-label');
+
+      if (deptSelector && deptDropdown) {
+        deptSelector.addEventListener('click', function () {
+          deptDropdown.classList.toggle('hidden');
+        });
+      }
+
+      const deptItems = document.querySelectorAll('.dept-item');
+      deptItems.forEach(function (button) {
+        button.addEventListener('click', function () {
+          const val = this.getAttribute('data-value');
+          if (deptLabel) deptLabel.textContent = val;
+          deptItems.forEach(function (el) {
+            el.classList.remove('bg-surface-container');
+            const check = el.querySelector('.material-symbols-outlined');
+            if (check) check.remove();
+          });
+          this.classList.add('bg-surface-container');
+          const checkIcon = document.createElement('span');
+          checkIcon.className = 'material-symbols-outlined text-primary text-[20px]';
+          checkIcon.textContent = 'check';
+          this.appendChild(checkIcon);
+        });
+      });
+
+      const newDeptInput = document.getElementById('new-dept-input');
+      const saveDeptBtn = document.getElementById('save-new-dept-btn');
+
+      if (saveDeptBtn && newDeptInput) {
+        saveDeptBtn.addEventListener('click', function () {
+          const newName = newDeptInput.value.trim();
+          if (!newName) return;
+          if (deptLabel) deptLabel.textContent = newName;
+          newDeptInput.value = '';
+        });
+      }
+
+      const modal = document.getElementById('delete-modal-backdrop');
+      const deleteTrigger = document.getElementById('delete-bagas-btn');
+      const cancelBtn = document.getElementById('cancel-delete-btn');
+      const confirmBtn = document.getElementById('confirm-delete-btn');
+
+      function hideModal() {
+        if (modal) modal.classList.add('hidden');
+      }
+
+      function showModal() {
+        if (modal) modal.classList.remove('hidden');
+      }
+
+      if (deleteTrigger) deleteTrigger.addEventListener('click', showModal);
+      if (cancelBtn) cancelBtn.addEventListener('click', hideModal);
+      if (confirmBtn) {
+        confirmBtn.addEventListener('click', function () {
+          hideModal();
+          if (deleteTrigger) {
+            const card = deleteTrigger.closest('.bg-surface-container-lowest');
+            if (card) {
+              card.style.opacity = '0.35';
+              card.style.pointerEvents = 'none';
+            }
+          }
+        });
+      }
+
+      const filterChips = document.querySelectorAll('.filter-chip');
+      filterChips.forEach(function (chip) {
+        chip.addEventListener('click', function () {
+          filterChips.forEach(function (c) {
+            c.classList.remove('bg-primary', 'text-on-primary', 'shadow-sm');
+            c.classList.add('bg-surface-container-low', 'text-on-surface-variant');
+          });
+          this.classList.remove('bg-surface-container-low', 'text-on-surface-variant');
+          this.classList.add('bg-primary', 'text-on-primary', 'shadow-sm');
+        });
+      });
+    })();
+  </script>
+</div></main><nav class="fixed bottom-0 w-full z-50 pb-safe bg-surface-container-lowest/95 backdrop-blur-xl shadow-[0_-2px_12px_rgba(12,27,42,0.05)]" data-active-classes="text-primary-container"><div class="grid grid-cols-4 h-16 px-gutter-mobile"><a class="flex flex-col items-center justify-center min-h-[52px] h-full text-on-surface-variant transition-colors gap-0.5" data-path="attendance-hub" href="#"><span class="material-symbols-outlined text-[22px]">verified</span><span class="font-label-sm text-label-sm">Presensi</span></a><a class="flex flex-col items-center justify-center min-h-[52px] h-full text-on-surface-variant transition-colors gap-0.5" data-path="monthly-calendar" href="#"><span class="material-symbols-outlined text-[22px]">calendar_month</span><span class="font-label-sm text-label-sm">Kalender</span></a><a aria-current="page" class="flex flex-col items-center justify-center min-h-[52px] h-full transition-colors gap-0.5 text-primary-container" data-path="employee-manager" href="#"><span class="material-symbols-outlined text-[22px]">badge</span><span class="font-label-sm text-label-sm">Karyawan</span></a><a class="flex flex-col items-center justify-center min-h-[52px] h-full text-on-surface-variant transition-colors gap-0.5" data-path="admin-analytics" href="#"><span class="material-symbols-outlined text-[22px]">analytics</span><span class="font-label-sm text-label-sm">Analitik</span></a></div></nav></body></html>

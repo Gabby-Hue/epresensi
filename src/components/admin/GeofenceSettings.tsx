@@ -1,9 +1,10 @@
 import React, { useEffect, useState } from 'react';
-import { Alert, StyleSheet, Text, TextInput, TouchableOpacity, View } from 'react-native';
+import { StyleSheet, Text, TextInput, TouchableOpacity, View } from 'react-native';
 import { OfficeSettings } from '../../types/attendance';
 import { Card } from '../ui/Card';
 import { Button } from '../ui/Button';
 import { MapView } from '../ui/MapView';
+import { ConfirmDialog } from '../ui/ConfirmDialog';
 import { getCurrentLocation } from '../../services/locationService';
 import { Feather } from '@expo/vector-icons';
 import { colors, fontSize, radius } from '../../theme';
@@ -32,8 +33,20 @@ export const GeofenceSettings: React.FC<OfficeManagerProps> = ({
   const [saving, setSaving] = useState(false);
   const [fetchingGps, setFetchingGps] = useState(false);
   const [deletingId, setDeletingId] = useState<string | null>(null);
+  const [optimisticallyRemoved, setOptimisticallyRemoved] = useState<string[]>([]);
+  const [officeToDelete, setOfficeToDelete] = useState<OfficeSettings | null>(null);
+  const [feedbackDialog, setFeedbackDialog] = useState<{
+    title: string;
+    message: string;
+    variant: 'primary' | 'danger';
+  } | null>(null);
 
-  const editing = editingId ? offices.find((o) => o.id === editingId) ?? null : null;
+  useEffect(() => {
+    setOptimisticallyRemoved([]);
+  }, [offices]);
+
+  const visibleOffices = offices.filter((office) => !optimisticallyRemoved.includes(office.id));
+  const editing = editingId ? visibleOffices.find((o) => o.id === editingId) ?? null : null;
 
   useEffect(() => {
     if (editing) {
@@ -50,8 +63,8 @@ export const GeofenceSettings: React.FC<OfficeManagerProps> = ({
   const latNum = parseFloat(form.latitude);
   const lngNum = parseFloat(form.longitude);
   const radNum = parseInt(form.radiusMeters, 10);
-  const previewLat = isFinite(latNum) ? latNum : (editing?.latitude ?? offices[0]?.latitude ?? -6.2088);
-  const previewLng = isFinite(lngNum) ? lngNum : (editing?.longitude ?? offices[0]?.longitude ?? 106.8456);
+  const previewLat = isFinite(latNum) ? latNum : (editing?.latitude ?? visibleOffices[0]?.latitude ?? -6.2088);
+  const previewLng = isFinite(lngNum) ? lngNum : (editing?.longitude ?? visibleOffices[0]?.longitude ?? 106.8456);
   const previewRad = Number.isInteger(radNum) && radNum > 0 ? radNum : (editing?.radiusMeters ?? 150);
 
   const startAdd = () => {
@@ -84,7 +97,13 @@ export const GeofenceSettings: React.FC<OfficeManagerProps> = ({
     setFetchingGps(true);
     const { coords, errorMsg } = await getCurrentLocation();
     setFetchingGps(false);
-    if (errorMsg) Alert.alert('GPS', errorMsg);
+    if (errorMsg) {
+      setFeedbackDialog({
+        title: 'GPS',
+        message: errorMsg,
+        variant: 'danger',
+      });
+    }
     setForm((f) => ({ ...f, latitude: coords.latitude.toFixed(6), longitude: coords.longitude.toFixed(6) }));
   };
 
@@ -93,11 +112,19 @@ export const GeofenceSettings: React.FC<OfficeManagerProps> = ({
     const lng = parseFloat(form.longitude);
     const rad = parseInt(form.radiusMeters, 10);
     if (!form.officeName.trim()) {
-      Alert.alert('Belum lengkap', 'Isi nama kantor dulu, contoh: Kantor Pusat / Cabang Sidoarjo.');
+      setFeedbackDialog({
+        title: 'Belum lengkap',
+        message: 'Isi nama kantor dulu, contoh: Kantor Pusat / Cabang Sidoarjo.',
+        variant: 'danger',
+      });
       return;
     }
     if (!isFinite(lat) || !isFinite(lng) || !Number.isInteger(rad) || rad <= 0) {
-      Alert.alert('Tidak valid', 'Periksa koordinat dan radius (bilangan bulat meter).');
+      setFeedbackDialog({
+        title: 'Tidak valid',
+        message: 'Periksa koordinat dan radius (bilangan bulat meter).',
+        variant: 'danger',
+      });
       return;
     }
     setSaving(true);
@@ -108,7 +135,11 @@ export const GeofenceSettings: React.FC<OfficeManagerProps> = ({
     setSaving(false);
     if (res.success) succeed();
     else fail();
-    Alert.alert(res.success ? 'Berhasil' : 'Gagal', res.message);
+    setFeedbackDialog({
+      title: res.success ? 'Berhasil' : 'Gagal',
+      message: res.message,
+      variant: res.success ? 'primary' : 'danger',
+    });
     if (res.success) {
       setEditingId(null);
       setForm(EMPTY_FORM);
@@ -117,34 +148,38 @@ export const GeofenceSettings: React.FC<OfficeManagerProps> = ({
   };
 
   const handleDelete = (office: OfficeSettings) => {
-    Alert.alert(
-      'Hapus titik?',
-      `Titik "${office.officeName}" akan dihapus. Presensi lama yang tercatat di sini tidak ikut terhapus.`,
-      [
-        { text: 'Batal', style: 'cancel' },
-        {
-          text: 'Hapus',
-          style: 'destructive',
-          onPress: async () => {
-            setDeletingId(office.id);
-            const res = await onDelete(office.id);
-            setDeletingId(null);
-            if (editingId === office.id) {
-              setEditingId(null);
-              setForm(EMPTY_FORM);
-            }
-            if (res.success) succeed();
-            else fail();
-            Alert.alert(res.success ? 'Berhasil' : 'Gagal', res.message);
-          },
-        },
-      ]
-    );
+    select();
+    setOfficeToDelete(office);
+  };
+
+  const confirmDeleteOffice = async () => {
+    if (!officeToDelete) return;
+    const target = officeToDelete;
+    setOfficeToDelete(null);
+    setDeletingId(target.id);
+    const res = await onDelete(target.id);
+    setDeletingId(null);
+    if (res.success) {
+      setOptimisticallyRemoved((current) => current.includes(target.id) ? current : [...current, target.id]);
+      if (editingId === target.id) {
+        setEditingId(null);
+        setForm(EMPTY_FORM);
+        setShowForm(false);
+      }
+      succeed();
+    } else {
+      fail();
+    }
+    setFeedbackDialog({
+      title: res.success ? 'Berhasil' : 'Gagal',
+      message: res.message,
+      variant: res.success ? 'primary' : 'danger',
+    });
   };
 
   return (
     <View>
-      <Card title={`Titik Kantor (${offices.length})`} icon="map-pin" subtitle="Tambah cabang, atur radius tiap titik">
+      <Card title={`Titik Kantor (${visibleOffices.length})`} icon="map-pin" subtitle="Tambah cabang, atur radius tiap titik">
         {/* Peta semua titik */}
         <View style={styles.mapBox}>
           <MapView
@@ -153,7 +188,7 @@ export const GeofenceSettings: React.FC<OfficeManagerProps> = ({
             officeLat={previewLat}
             officeLng={previewLng}
             radiusMeters={previewRad}
-            offices={offices}
+            offices={visibleOffices}
             activeOfficeId={editingId}
             mainColor={form.color}
             height={230}
@@ -166,7 +201,7 @@ export const GeofenceSettings: React.FC<OfficeManagerProps> = ({
         <Text style={styles.hint}>Ketuk peta untuk menaruh titik, atau pakai GPS saat ini.</Text>
 
         {/* Daftar titik */}
-        {offices.map((office) => {
+        {visibleOffices.map((office) => {
           const active = editingId === office.id;
           return (
             <View key={office.id} style={[styles.officeRow, active && styles.officeRowActive]}>
@@ -186,7 +221,7 @@ export const GeofenceSettings: React.FC<OfficeManagerProps> = ({
                 style={styles.deleteBtn}
                 disabled={deletingId === office.id}
               >
-                <Feather name="trash-2" size={17} color={colors.danger} />
+                <Text style={styles.deleteText}>{deletingId === office.id ? 'Menghapus...' : 'Hapus'}</Text>
               </TouchableOpacity>
             </View>
           );
@@ -298,6 +333,32 @@ export const GeofenceSettings: React.FC<OfficeManagerProps> = ({
         )}
       </Card>
       )}
+
+      {/* Dialog Konfirmasi Hapus Titik Kantor */}
+      <ConfirmDialog
+        visible={!!officeToDelete}
+        onClose={() => setOfficeToDelete(null)}
+        onConfirm={confirmDeleteOffice}
+        title="Hapus Titik Kantor?"
+        message={`Titik "${officeToDelete?.officeName}" akan dihapus. Presensi lama yang tercatat di sini tidak ikut terhapus.`}
+        confirmText="Ya, Hapus"
+        cancelText="Batal"
+        icon="trash-2"
+        variant="danger"
+      />
+
+      {/* Dialog Feedback (Berhasil / Gagal) */}
+      <ConfirmDialog
+        visible={!!feedbackDialog}
+        onClose={() => setFeedbackDialog(null)}
+        onConfirm={() => setFeedbackDialog(null)}
+        title={feedbackDialog?.title || ''}
+        message={feedbackDialog?.message || ''}
+        confirmText="Tutup"
+        singleButton={true}
+        icon={feedbackDialog?.variant === 'primary' ? 'check-circle' : 'alert-circle'}
+        variant={feedbackDialog?.variant || 'primary'}
+      />
     </View>
   );
 };
@@ -319,7 +380,8 @@ const styles = StyleSheet.create({
   officeDot: { width: 12, height: 12, borderRadius: 6, backgroundColor: colors.primary, marginRight: 10 },
   officeName: { fontSize: fontSize.sm, fontWeight: '700', color: colors.ink },
   officeSub: { fontSize: fontSize.xs, color: colors.muted, marginTop: 2, fontWeight: '600' },
-  deleteBtn: { padding: 12 },
+  deleteBtn: { paddingVertical: 8, paddingHorizontal: 10, marginRight: 8, borderWidth: 1, borderColor: '#E8B4B4', borderRadius: radius.sm, backgroundColor: '#FFF8F8' },
+  deleteText: { color: colors.danger, fontSize: fontSize.xs, fontWeight: '700' },
   addBtn: { marginTop: 4, marginBottom: 4 },
   formGroup: { marginBottom: 12 },
   label: { fontSize: fontSize.xs, fontWeight: '700', color: colors.ink, marginBottom: 4 },

@@ -13,8 +13,35 @@ import {
 import * as DocumentPicker from 'expo-document-picker';
 import * as ImagePicker from 'expo-image-picker';
 import { Button } from '../ui/Button';
+import { Modal } from '../ui/Modal';
 import { Feather } from '@expo/vector-icons';
 import { colors, fontSize, radius, spacing } from '../../theme';
+import { select } from '../../services/feedbackService';
+
+const CAL_MONTH_NAMES = [
+  'Januari', 'Februari', 'Maret', 'April', 'Mei', 'Juni',
+  'Juli', 'Agustus', 'September', 'Oktober', 'November', 'Desember',
+];
+
+const CAL_MONTH_SHORT = [
+  'Jan', 'Feb', 'Mar', 'Apr', 'Mei', 'Jun',
+  'Jul', 'Agu', 'Sep', 'Okt', 'Nov', 'Des',
+];
+
+const toDateKey = (y: number, m: number, d: number) =>
+  `${y}-${String(m + 1).padStart(2, '0')}-${String(d).padStart(2, '0')}`;
+
+const parseDateKey = (key: string): { y: number; m: number; d: number } | null => {
+  const m = /^(\d{4})-(\d{2})-(\d{2})/.exec(key || '');
+  if (!m) return null;
+  return { y: Number(m[1]), m: Number(m[2]) - 1, d: Number(m[3]) };
+};
+
+const formatDisplayDate = (key: string): string => {
+  const p = parseDateKey(key);
+  if (!p) return key;
+  return `${p.d} ${CAL_MONTH_SHORT[p.m]} ${p.y}`;
+};
 
 interface LeaveRequestFormProps {
   onSubmit: (data: {
@@ -24,9 +51,10 @@ interface LeaveRequestFormProps {
     documentUrl?: string;
   }) => void;
   onBack: () => void;
+  loading?: boolean;
 }
 
-export const LeaveRequestForm: React.FC<LeaveRequestFormProps> = ({ onSubmit, onBack }) => {
+export const LeaveRequestForm: React.FC<LeaveRequestFormProps> = ({ onSubmit, onBack, loading = false }) => {
   const today = new Date().toISOString().split('T')[0];
   const [leaveCategory, setLeaveCategory] = useState<'sakit' | 'izin'>('sakit');
   const [startDate, setStartDate] = useState(today);
@@ -34,6 +62,34 @@ export const LeaveRequestForm: React.FC<LeaveRequestFormProps> = ({ onSubmit, on
   const [reason, setReason] = useState('');
   const [attachedUri, setAttachedUri] = useState<string | undefined>(undefined);
   const [attachedName, setAttachedName] = useState<string>('');
+  const [pickerFor, setPickerFor] = useState<'start' | 'end' | null>(null);
+  const [pickerYear, setPickerYear] = useState(() => new Date().getFullYear());
+  const [pickerMonth, setPickerMonth] = useState(() => new Date().getMonth());
+
+  const openPicker = (which: 'start' | 'end') => {
+    select();
+    const current = which === 'start' ? startDate : endDate;
+    const p = parseDateKey(current);
+    const now = new Date();
+    setPickerYear(p ? p.y : now.getFullYear());
+    setPickerMonth(p ? p.m : now.getMonth());
+    setPickerFor(which);
+  };
+
+  const handlePickDay = (day: number) => {
+    select();
+    const picked = toDateKey(pickerYear, pickerMonth, day);
+    if (pickerFor === 'start') {
+      setStartDate(picked);
+      // Kalau tanggal mulai melewati tanggal sampai, geser tanggal sampai ikut maju.
+      if (picked > endDate) setEndDate(picked);
+    } else if (pickerFor === 'end') {
+      setEndDate(picked);
+      // Kalau tanggal sampai mundur melewati tanggal mulai, geser tanggal mulai ikut mundur.
+      if (picked < startDate) setStartDate(picked);
+    }
+    setPickerFor(null);
+  };
 
   const handlePickDocument = async () => {
     try {
@@ -192,30 +248,28 @@ export const LeaveRequestForm: React.FC<LeaveRequestFormProps> = ({ onSubmit, on
             <View style={styles.dateRow}>
               <View style={[styles.dateCol, { marginRight: 8 }]}>
                 <Text style={styles.subLabel}>Mulai Tanggal</Text>
-                <View style={styles.inputWrap}>
-                  <Feather name="calendar" size={16} color={colors.faint} style={styles.inputIcon} />
-                  <TextInput
-                    style={styles.textInput}
-                    value={startDate}
-                    onChangeText={setStartDate}
-                    placeholder="YYYY-MM-DD"
-                    placeholderTextColor={colors.faint}
-                  />
-                </View>
+                <TouchableOpacity
+                  activeOpacity={0.8}
+                  onPress={() => openPicker('start')}
+                  style={styles.inputWrap}
+                >
+                  <Feather name="calendar" size={16} color={colors.primary} style={styles.inputIcon} />
+                  <Text style={styles.dateValue}>{formatDisplayDate(startDate)}</Text>
+                  <Feather name="chevron-down" size={16} color={colors.faint} />
+                </TouchableOpacity>
               </View>
 
               <View style={[styles.dateCol, { marginLeft: 8 }]}>
                 <Text style={styles.subLabel}>Sampai Tanggal</Text>
-                <View style={styles.inputWrap}>
-                  <Feather name="calendar" size={16} color={colors.faint} style={styles.inputIcon} />
-                  <TextInput
-                    style={styles.textInput}
-                    value={endDate}
-                    onChangeText={setEndDate}
-                    placeholder="YYYY-MM-DD"
-                    placeholderTextColor={colors.faint}
-                  />
-                </View>
+                <TouchableOpacity
+                  activeOpacity={0.8}
+                  onPress={() => openPicker('end')}
+                  style={styles.inputWrap}
+                >
+                  <Feather name="calendar" size={16} color={colors.primary} style={styles.inputIcon} />
+                  <Text style={styles.dateValue}>{formatDisplayDate(endDate)}</Text>
+                  <Feather name="chevron-down" size={16} color={colors.faint} />
+                </TouchableOpacity>
               </View>
             </View>
           </View>
@@ -287,16 +341,18 @@ export const LeaveRequestForm: React.FC<LeaveRequestFormProps> = ({ onSubmit, on
           <View style={styles.infoBanner}>
             <Feather name="info" size={18} color={colors.primary} style={{ marginRight: 10 }} />
             <Text style={styles.infoText}>
-              Setelah formulir disubmit, Anda akan diarahkan untuk mengambil swafoto sebagai verifikasi. Pengajuan masuk antrean dan menunggu persetujuan admin.
+              Pengajuan izin/sakit akan langsung dikirim ke sistem dan masuk ke antrean persetujuan admin.
             </Text>
           </View>
 
           {/* Action Buttons */}
           <View style={styles.buttonContainer}>
             <Button
-              title="Lanjutkan ke Swafoto"
+              title={loading ? 'Mengajukan...' : 'Ajukan'}
               variant="primary"
-              icon="camera"
+              icon="send"
+              loading={loading}
+              disabled={loading}
               onPress={handleSubmit}
               style={styles.submitButton}
             />
@@ -304,12 +360,116 @@ export const LeaveRequestForm: React.FC<LeaveRequestFormProps> = ({ onSubmit, on
               title="Kembali ke Dashboard"
               variant="outline"
               icon="arrow-left"
+              disabled={loading}
               onPress={onBack}
               style={styles.backActionButton}
             />
           </View>
         </ScrollView>
       </KeyboardAvoidingView>
+
+      <Modal
+        visible={pickerFor !== null}
+        onClose={() => setPickerFor(null)}
+        title={pickerFor === 'start' ? 'Pilih Tanggal Mulai' : 'Pilih Tanggal Selesai'}
+      >
+        {/* Navigasi bulan */}
+        <View style={styles.calNav}>
+          <TouchableOpacity
+            activeOpacity={0.7}
+            hitSlop={8}
+            onPress={() => {
+              select();
+              const d = new Date(pickerYear, pickerMonth - 1, 1);
+              setPickerYear(d.getFullYear());
+              setPickerMonth(d.getMonth());
+            }}
+            style={styles.calNavBtn}
+          >
+            <Feather name="chevron-left" size={18} color={colors.ink} />
+          </TouchableOpacity>
+          <Text style={styles.calNavTitle}>
+            {CAL_MONTH_NAMES[pickerMonth]} {pickerYear}
+          </Text>
+          <TouchableOpacity
+            activeOpacity={0.7}
+            hitSlop={8}
+            onPress={() => {
+              select();
+              const d = new Date(pickerYear, pickerMonth + 1, 1);
+              setPickerYear(d.getFullYear());
+              setPickerMonth(d.getMonth());
+            }}
+            style={styles.calNavBtn}
+          >
+            <Feather name="chevron-right" size={18} color={colors.ink} />
+          </TouchableOpacity>
+        </View>
+
+        {/* Nama hari */}
+        <View style={styles.calWeekRow}>
+          {['Min', 'Sen', 'Sel', 'Rab', 'Kam', 'Jum', 'Sab'].map((lbl, idx) => (
+            <View key={lbl} style={styles.calWeekCell}>
+              <Text
+                style={[
+                  styles.calWeekText,
+                  (idx === 0 || idx === 6) && { color: colors.izin },
+                ]}
+              >
+                {lbl}
+              </Text>
+            </View>
+          ))}
+        </View>
+
+        {/* Grid tanggal */}
+        <View style={styles.calGrid}>
+          {(() => {
+            const firstDay = new Date(pickerYear, pickerMonth, 1).getDay();
+            const daysInMonth = new Date(pickerYear, pickerMonth + 1, 0).getDate();
+            const activeKey = pickerFor === 'start' ? startDate : endDate;
+            const cells: Array<number | null> = [];
+            for (let i = 0; i < firstDay; i++) cells.push(null);
+            for (let d = 1; d <= daysInMonth; d++) cells.push(d);
+            return cells.map((day, idx) => {
+              if (day === null) {
+                return <View key={`e-${idx}`} style={styles.calCell} />;
+              }
+              const key = toDateKey(pickerYear, pickerMonth, day);
+              const isActive = key === activeKey;
+              const weekday = new Date(pickerYear, pickerMonth, day).getDay();
+              const isWeekend = weekday === 0 || weekday === 6;
+              return (
+                <View key={`d-${day}`} style={styles.calCell}>
+                  <TouchableOpacity
+                    activeOpacity={0.75}
+                    onPress={() => handlePickDay(day)}
+                    style={[
+                      styles.calDay,
+                      isActive && styles.calDayActive,
+                      !isActive && isWeekend && styles.calDayWeekend,
+                    ]}
+                  >
+                    <Text
+                      style={[
+                        styles.calDayText,
+                        isActive && styles.calDayTextActive,
+                        !isActive && isWeekend && styles.calDayTextWeekend,
+                      ]}
+                    >
+                      {day}
+                    </Text>
+                  </TouchableOpacity>
+                </View>
+              );
+            });
+          })()}
+        </View>
+
+        <Text style={styles.calHint}>
+          Terpilih: {formatDisplayDate(pickerFor === 'start' ? startDate : endDate)}
+        </Text>
+      </Modal>
     </View>
   );
 };
@@ -459,6 +619,15 @@ const styles = StyleSheet.create({
     borderColor: colors.border,
     borderRadius: radius.md,
     paddingHorizontal: 12,
+    paddingVertical: 12,
+    minHeight: 50,
+    gap: 4,
+  },
+  dateValue: {
+    flex: 1,
+    fontSize: fontSize.sm,
+    fontWeight: '600',
+    color: colors.ink,
   },
   inputIcon: {
     marginRight: 8,
@@ -569,5 +738,82 @@ const styles = StyleSheet.create({
   },
   backActionButton: {
     borderColor: colors.borderStrong,
+  },
+  calNav: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'space-between',
+    marginBottom: spacing.sm,
+  },
+  calNavBtn: {
+    width: 38,
+    height: 38,
+    borderRadius: 19,
+    backgroundColor: colors.surfaceSoft,
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  calNavTitle: {
+    fontSize: fontSize.md,
+    fontWeight: '700',
+    color: colors.ink,
+  },
+  calWeekRow: {
+    flexDirection: 'row',
+    marginBottom: 6,
+  },
+  calWeekCell: {
+    flex: 1,
+    alignItems: 'center',
+    paddingVertical: 6,
+  },
+  calWeekText: {
+    fontSize: fontSize.xs,
+    fontWeight: '700',
+    color: colors.muted,
+  },
+  calGrid: {
+    flexDirection: 'row',
+    flexWrap: 'wrap',
+  },
+  calCell: {
+    width: '14.28%',
+    aspectRatio: 1,
+    alignItems: 'center',
+    justifyContent: 'center',
+    padding: 3,
+  },
+  calDay: {
+    width: '100%',
+    height: '100%',
+    borderRadius: 999,
+    alignItems: 'center',
+    justifyContent: 'center',
+    backgroundColor: colors.surfaceSoft,
+  },
+  calDayActive: {
+    backgroundColor: colors.primary,
+  },
+  calDayWeekend: {
+    backgroundColor: colors.izinSoft,
+  },
+  calDayText: {
+    fontSize: fontSize.sm,
+    fontWeight: '600',
+    color: colors.ink,
+  },
+  calDayTextActive: {
+    color: '#FFFFFF',
+    fontWeight: '700',
+  },
+  calDayTextWeekend: {
+    color: colors.izin,
+  },
+  calHint: {
+    fontSize: fontSize.xs,
+    color: colors.muted,
+    fontWeight: '600',
+    textAlign: 'center',
+    marginTop: spacing.md,
   },
 });

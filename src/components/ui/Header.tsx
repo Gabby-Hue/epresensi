@@ -1,6 +1,8 @@
+// E-Presensi UI · Modern Header
+// SKMI logo, crisp typography, clean avatar widget.
+
 import React from 'react';
 import { Image, StyleSheet, Text, TouchableOpacity, View } from 'react-native';
-import { Feather } from '@expo/vector-icons';
 import { UserProfile } from '../../types/attendance';
 import { colors, fontSize, radius, spacing } from '../../theme';
 
@@ -20,13 +22,15 @@ export const Header: React.FC<HeaderProps> = ({ user, onPressProfile }) => {
   return (
     <View style={styles.container}>
       <View style={styles.left}>
-        <View style={styles.logo}>
-          <Feather name="check-square" size={20} color="#FFFFFF" />
-        </View>
+        <Image
+          source={require('../../../assets/skmi-logo3.png')}
+          style={styles.logo}
+          resizeMode="contain"
+        />
         <View>
           <Text style={styles.appName}>E-Presensi</Text>
           <Text style={styles.role}>
-            {user.role === 'admin' ? 'Admin' : user.department || 'Karyawan'}
+            {user.role === 'admin' ? 'Admin Sistem' : user.department || 'Karyawan'}
           </Text>
         </View>
       </View>
@@ -37,6 +41,8 @@ export const Header: React.FC<HeaderProps> = ({ user, onPressProfile }) => {
         disabled={!onPressProfile}
         style={styles.userBtn}
         hitSlop={8}
+        accessibilityRole="button"
+        accessibilityLabel="Buka Profil Pengguna"
       >
         {user.avatarUrl ? (
           <Image source={{ uri: user.avatarUrl }} style={styles.avatar} />
@@ -56,7 +62,7 @@ const styles = StyleSheet.create({
     alignItems: 'center',
     justifyContent: 'space-between',
     paddingHorizontal: spacing.md,
-    paddingVertical: 10,
+    paddingVertical: 12,
     backgroundColor: colors.surface,
     borderBottomWidth: 1,
     borderBottomColor: colors.border,
@@ -66,47 +72,45 @@ const styles = StyleSheet.create({
     alignItems: 'center',
   },
   logo: {
-    width: 44,
-    height: 44,
-    borderRadius: radius.md,
-    backgroundColor: colors.primary,
-    alignItems: 'center',
-    justifyContent: 'center',
+    width: 40,
+    height: 40,
     marginRight: spacing.sm,
   },
   appName: {
     fontSize: fontSize.md,
     fontWeight: '700',
     color: colors.ink,
+    letterSpacing: -0.2,
   },
   role: {
-    fontSize: fontSize.xs,
-    color: colors.muted,
-    marginTop: 2,
+    fontSize: 11,
+    color: colors.primary,
+    marginTop: 1,
+    fontWeight: '600',
   },
   userBtn: {
     alignItems: 'center',
     justifyContent: 'center',
   },
   avatar: {
-    width: 40,
-    height: 40,
-    borderRadius: 20,
-    borderWidth: 1,
-    borderColor: colors.borderStrong,
+    width: 34,
+    height: 34,
+    borderRadius: radius.md,
+    borderWidth: 1.5,
+    borderColor: colors.primaryBorder,
   },
   avatarFallback: {
-    width: 40,
-    height: 40,
-    borderRadius: 20,
+    width: 34,
+    height: 34,
+    borderRadius: radius.md,
     backgroundColor: colors.primarySoft,
     alignItems: 'center',
     justifyContent: 'center',
     borderWidth: 1,
-    borderColor: colors.primary,
+    borderColor: colors.primaryBorder,
   },
   avatarText: {
-    fontSize: fontSize.sm,
+    fontSize: 12,
     fontWeight: '700',
     color: colors.primary,
   },

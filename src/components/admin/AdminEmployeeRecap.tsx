@@ -71,6 +71,7 @@ export const AdminEmployeeRecap: React.FC<AdminEmployeeRecapProps> = ({
     let izin = 0;
     let libur = 0;
     let tanpaKabar = 0;
+    let terhitung = 0;
     for (let d = 1; d <= daysInMonth; d++) {
       const isPast = isPastMonth || (isCurrent && d < now.getDate());
       const isToday = isCurrent && d === now.getDate();
@@ -78,13 +79,14 @@ export const AdminEmployeeRecap: React.FC<AdminEmployeeRecapProps> = ({
       const st = getDayStatus(map[d], isPast, isToday, weekday === 0 || weekday === 6);
       // Hari yang akan datang & hari ini yang masih kosong tidak dihitung
       if (st === 'akan_datang' || st === 'hari_ini_kosong') continue;
+      if (st !== 'libur') terhitung++;
       if (st === 'lengkap') lengkap++;
       else if (st === 'satu_sesi') satuSesi++;
       else if (st === 'izin') izin++;
       else if (st === 'libur') libur++;
       else if (st === 'absen') tanpaKabar++;
     }
-    return { lengkap, satuSesi, izin, libur, tanpaKabar };
+    return { lengkap, satuSesi, izin, libur, tanpaKabar, persentase: terhitung ? Math.round(((lengkap + satuSesi) / terhitung) * 100) : 0 };
   }, [records, year, month]);
 
   const dayKey = day !== null ? `${monthKey}-${String(day).padStart(2, '0')}` : null;
@@ -117,6 +119,10 @@ export const AdminEmployeeRecap: React.FC<AdminEmployeeRecapProps> = ({
           ) : (
             <>
               <View style={styles.statsRow}>
+                <View style={[styles.statBox, { backgroundColor: '#DCFCE7' }]}>
+                  <Text style={[styles.statNum, { color: '#15803D' }]}>{summary.persentase}%</Text>
+                  <Text style={styles.statLbl}>Kehadiran</Text>
+                </View>
                 <View style={[styles.statBox, { backgroundColor: colors.primarySoft }]}>
                   <Text style={[styles.statNum, { color: colors.primary }]}>{summary.lengkap}</Text>
                   <Text style={styles.statLbl}>Lengkap</Text>
@@ -215,14 +221,16 @@ const styles = StyleSheet.create({
     left: 0,
     right: 0,
     bottom: 0,
-    backgroundColor: 'rgba(12, 27, 42, 0.5)',
+    backgroundColor: 'rgba(30, 41, 59, 0.45)',
     justifyContent: 'flex-end',
     zIndex: 60,
   },
   sheet: {
     backgroundColor: colors.surface,
-    borderTopLeftRadius: 24,
-    borderTopRightRadius: 24,
+    borderTopLeftRadius: radius.xl,
+    borderTopRightRadius: radius.xl,
+    borderWidth: 1,
+    borderColor: colors.border,
     maxHeight: '92%',
     minHeight: '60%',
     paddingHorizontal: spacing.lg,
@@ -329,16 +337,16 @@ const styles = StyleSheet.create({
     borderBottomColor: colors.border,
   },
   thumb: {
-    width: 48,
-    height: 48,
-    borderRadius: 24,
+    width: 44,
+    height: 44,
+    borderRadius: radius.md,
     marginRight: 10,
     backgroundColor: colors.surfaceSoft,
   },
   thumbFallback: {
-    width: 48,
-    height: 48,
-    borderRadius: 24,
+    width: 44,
+    height: 44,
+    borderRadius: radius.md,
     marginRight: 10,
     backgroundColor: colors.surfaceSoft,
     alignItems: 'center',

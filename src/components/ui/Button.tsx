@@ -1,3 +1,6 @@
+// E-Presensi UI · Modern Shadcn Button
+// Clean hairline borders, subtle ambient micro-shadow, and responsive tactile sound/vibration feedback.
+
 import React from 'react';
 import {
   ActivityIndicator,
@@ -9,7 +12,7 @@ import {
   ViewStyle,
 } from 'react-native';
 import { Feather } from '@expo/vector-icons';
-import { colors, fontSize, radius, touch } from '../../theme';
+import { colors, fontSize, neoShadow, radius, touch } from '../../theme';
 import { tap } from '../../services/feedbackService';
 
 interface ButtonProps extends TouchableOpacityProps {
@@ -34,10 +37,10 @@ export const Button: React.FC<ButtonProps> = ({
   ...props
 }) => {
   const palette = {
-    primary: { bg: colors.primary, text: '#FFFFFF', border: colors.primaryDark },
-    secondary: { bg: colors.surfaceSoft, text: colors.ink, border: colors.borderStrong },
+    primary: { bg: colors.primary, text: '#FFFFFF', border: colors.primary },
+    secondary: { bg: colors.surfaceSoft, text: colors.ink, border: colors.border },
     outline: { bg: colors.surface, text: colors.ink, border: colors.borderStrong },
-    danger: { bg: colors.surface, text: colors.danger, border: colors.danger },
+    danger: { bg: colors.danger, text: '#FFFFFF', border: colors.danger },
   }[variant];
 
   const effectiveTextColor = textColor || (disabled ? colors.faint : palette.text);
@@ -45,11 +48,15 @@ export const Button: React.FC<ButtonProps> = ({
 
   return (
     <TouchableOpacity
-      activeOpacity={0.85}
+      activeOpacity={0.8}
       disabled={disabled || loading}
       style={[
         styles.button,
-        { backgroundColor: disabled ? colors.surfaceSoft : palette.bg, borderColor: palette.border },
+        !disabled && variant === 'primary' && neoShadow.sm,
+        {
+          backgroundColor: disabled ? colors.surfaceSoft : palette.bg,
+          borderColor: disabled ? colors.border : palette.border,
+        },
         fullWidth && styles.fullWidth,
         style,
       ]}
@@ -63,7 +70,7 @@ export const Button: React.FC<ButtonProps> = ({
         <ActivityIndicator color={textColor || palette.text} size="small" />
       ) : (
         <>
-          {icon && <Feather name={icon} size={20} color={iconColor} style={styles.icon} />}
+          {icon && <Feather name={icon} size={16} color={iconColor} style={styles.icon} />}
           <Text style={[styles.text, { color: effectiveTextColor }]}>{title}</Text>
         </>
       )}
@@ -76,8 +83,8 @@ const styles = StyleSheet.create({
     flexDirection: 'row',
     alignItems: 'center',
     justifyContent: 'center',
-    paddingVertical: 16,
-    paddingHorizontal: 24,
+    paddingVertical: 12,
+    paddingHorizontal: 16,
     borderRadius: radius.md,
     borderWidth: 1,
     minHeight: touch.buttonMinHeight,
@@ -86,11 +93,11 @@ const styles = StyleSheet.create({
     width: '100%',
   },
   icon: {
-    marginRight: 12,
+    marginRight: 8,
   },
   text: {
-    fontSize: fontSize.md,
-    fontWeight: '700',
-    letterSpacing: 0.3,
+    fontSize: fontSize.sm,
+    fontWeight: '600',
+    letterSpacing: -0.1,
   },
 });

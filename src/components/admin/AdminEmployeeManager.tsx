@@ -1,6 +1,5 @@
-import React, { useState } from 'react';
+import React, { useEffect, useState } from 'react';
 import {
-  Alert,
   StyleSheet,
   Text,
   TextInput,
@@ -12,9 +11,11 @@ import { AttendanceService } from '../../services/attendanceService';
 import { Card } from '../ui/Card';
 import { Button } from '../ui/Button';
 import { Modal } from '../ui/Modal';
+import { ConfirmDialog } from '../ui/ConfirmDialog';
+import { DepartmentDropdown } from '../ui/DepartmentDropdown';
 import { Feather } from '@expo/vector-icons';
 import { colors, fontSize, radius } from '../../theme';
-import { select } from '../../services/feedbackService';
+import { select, succeed, fail } from '../../services/feedbackService';
 
 interface AdminEmployeeManagerProps {
   currentAdmin: UserProfile;
@@ -34,8 +35,15 @@ export const AdminEmployeeManager: React.FC<AdminEmployeeManagerProps> = ({
   const [password, setPassword] = useState('');
   const [showPassword, setShowPassword] = useState(false);
   const [department, setDepartment] = useState('');
+  const [departments, setDepartments] = useState<string[]>([]);
   const [loading, setLoading] = useState(false);
   const [formError, setFormError] = useState<string | null>(null);
+
+  useEffect(() => {
+    AttendanceService.getDepartments().then((list) => {
+      if (list && list.length > 0) setDepartments(list);
+    });
+  }, []);
 
   const [editing, setEditing] = useState<UserProfile | null>(null);
   const [editName, setEditName] = useState('');
@@ -44,6 +52,13 @@ export const AdminEmployeeManager: React.FC<AdminEmployeeManagerProps> = ({
   const [editError, setEditError] = useState<string | null>(null);
   const [deletingId, setDeletingId] = useState<string | null>(null);
   const [resettingId, setResettingId] = useState<string | null>(null);
+  const [userToDelete, setUserToDelete] = useState<UserProfile | null>(null);
+  const [userToResetDevice, setUserToResetDevice] = useState<UserProfile | null>(null);
+  const [feedbackModal, setFeedbackModal] = useState<{
+    title: string;
+    message: string;
+    variant: 'primary' | 'danger';
+  } | null>(null);
 
   const handleCreateAccount = async () => {
     setFormError(null);
@@ -65,18 +80,25 @@ export const AdminEmployeeManager: React.FC<AdminEmployeeManagerProps> = ({
     });
     setLoading(false);
     if (!success) {
+      fail();
       setFormError(message);
       return;
     }
+    succeed();
     setFullName('');
     setEmail('');
     setPassword('');
     setDepartment('');
-    Alert.alert('Berhasil', message);
+    setFeedbackModal({
+      title: 'Berhasil',
+      message,
+      variant: 'primary',
+    });
     onChanged();
   };
 
   const openEdit = (item: UserProfile) => {
+    select();
     setEditing(item);
     setEditName(item.fullName);
     setEditDept(item.department || '');
@@ -98,57 +120,71 @@ export const AdminEmployeeManager: React.FC<AdminEmployeeManagerProps> = ({
     });
     setEditSaving(false);
     if (!success) {
+      fail();
       setEditError(message);
       return;
     }
+    succeed();
     setEditing(null);
-    Alert.alert('Berhasil', message);
+    setFeedbackModal({
+      title: 'Berhasil',
+      message,
+      variant: 'primary',
+    });
     onChanged();
   };
 
   const handleResetDevice = (item: UserProfile) => {
-    Alert.alert(
-      'Atur ulang perangkat?',
-      `${item.fullName} bisa login dari HP baru. HP baru itu otomatis jadi perangkat resminya.`,
-      [
-        { text: 'Batal', style: 'cancel' },
-        {
-          text: 'Reset',
-          onPress: async () => {
-            setResettingId(item.id);
-            const { success, message } = await AttendanceService.resetEmployeeDevice(item.id);
-            setResettingId(null);
-            Alert.alert(success ? 'Berhasil' : 'Gagal', message);
-            if (success) onChanged();
-          },
-        },
-      ]
-    );
+    select();
+    setUserToResetDevice(item);
+  };
+
+  const confirmResetDevice = async () => {
+    if (!userToResetDevice) return;
+    const target = userToResetDevice;
+    setUserToResetDevice(null);
+    setResettingId(target.id);
+    const { success, message } = await AttendanceService.resetEmployeeDevice(target.id);
+    setResettingId(null);
+    if (success) {
+      succeed();
+      onChanged();
+    } else {
+      fail();
+    }
+    setFeedbackModal({
+      title: success ? 'Berhasil' : 'Gagal',
+      message,
+      variant: success ? 'primary' : 'danger',
+    });
   };
 
   const handleDelete = (item: UserProfile) => {
-    Alert.alert(
-      'Hapus akun?',
-      `${item.fullName} (${item.email}) tidak bisa absen lagi. Lanjutkan?`,
-      [
-        { text: 'Batal', style: 'cancel' },
-        {
-          text: 'Hapus',
-          style: 'destructive',
-          onPress: async () => {
-            setDeletingId(item.id);
-            const { success, message } = await AttendanceService.deleteEmployeeAccount(item.id);
-            setDeletingId(null);
-            Alert.alert(success ? 'Berhasil' : 'Gagal', message);
-            if (success) onChanged();
-          },
-        },
-      ]
-    );
+    select();
+    setUserToDelete(item);
+  };
+
+  const confirmDelete = async () => {
+    if (!userToDelete) return;
+    const target = userToDelete;
+    setUserToDelete(null);
+    setDeletingId(target.id);
+    const { success, message } = await AttendanceService.deleteEmployeeAccount(target.id);
+    setDeletingId(null);
+    if (success) {
+      succeed();
+      onChanged();
+    } else {
+      fail();
+    }
+    setFeedbackModal({
+      title: success ? 'Berhasil' : 'Gagal',
+      message,
+      variant: success ? 'primary' : 'danger',
+    });
   };
 
   const employees = users.filter((u) => u.role === 'employee');
-  const mine = employees.filter((e) => e.createdBy === currentAdmin.id);
 
   return (
     <View style={styles.container}>
@@ -175,12 +211,12 @@ export const AdminEmployeeManager: React.FC<AdminEmployeeManagerProps> = ({
         </View>
         <View style={styles.formGroup}>
           <Text style={styles.label}>Departemen</Text>
-          <TextInput
-            style={styles.input}
-            placeholder="Contoh: Umum, Keuangan"
-            placeholderTextColor={colors.faint}
+          <DepartmentDropdown
             value={department}
-            onChangeText={setDepartment}
+            onChange={setDepartment}
+            departments={departments}
+            onDepartmentsChange={setDepartments}
+            placeholder="Pilih departemen karyawan"
           />
         </View>
         <View style={styles.formGroup}>
@@ -222,14 +258,14 @@ export const AdminEmployeeManager: React.FC<AdminEmployeeManagerProps> = ({
       </Card>
 
       <Card
-        title={`Akun buatan saya (${mine.length})`}
-        subtitle="Bisa diubah dan dihapus"
-        icon="user-check"
+        title={`Daftar Karyawan (${employees.length})`}
+        subtitle="Kelola data, reset kunci perangkat, atau hapus akun"
+        icon="users"
       >
-        {mine.length === 0 ? (
-          <Text style={styles.emptyText}>Belum ada akun yang Anda buat.</Text>
+        {employees.length === 0 ? (
+          <Text style={styles.emptyText}>Belum ada akun karyawan.</Text>
         ) : (
-          mine.map((item) => (
+          employees.map((item) => (
             <View key={item.id} style={styles.userRow}>
               <View style={styles.avatar}>
                 <Text style={styles.avatarText}>
@@ -279,42 +315,6 @@ export const AdminEmployeeManager: React.FC<AdminEmployeeManagerProps> = ({
         )}
       </Card>
 
-      <Card
-        title={`Semua karyawan (${employees.length})`}
-        subtitle="Termasuk akun dari admin lain — ketuk untuk lihat rekap tanggalan"
-        icon="users"
-      >
-        {employees.length === 0 ? (
-          <Text style={styles.emptyText}>Belum ada akun karyawan.</Text>
-        ) : (
-          employees.map((item) => (
-            <TouchableOpacity
-              key={item.id}
-              activeOpacity={0.7}
-              onPress={() => {
-                select();
-                onSelectEmployee?.(item);
-              }}
-              style={styles.userRow}
-            >
-              <View style={styles.avatar}>
-                <Text style={styles.avatarText}>
-                  {item.fullName.substring(0, 2).toUpperCase()}
-                </Text>
-              </View>
-              <View style={{ flex: 1 }}>
-                <Text style={styles.userName}>{item.fullName}</Text>
-                <Text style={styles.userEmail}>{item.email}</Text>
-              </View>
-              <View style={styles.deptBadge}>
-                <Text style={styles.deptText}>{item.department || 'Staff'}</Text>
-              </View>
-              <Feather name="chevron-right" size={18} color={colors.faint} style={{ marginLeft: 8 }} />
-            </TouchableOpacity>
-          ))
-        )}
-      </Card>
-
       <Modal visible={!!editing} onClose={() => setEditing(null)} title="Ubah data karyawan">
         {editError && (
           <View style={styles.errorBox}>
@@ -331,12 +331,12 @@ export const AdminEmployeeManager: React.FC<AdminEmployeeManagerProps> = ({
           placeholderTextColor={colors.faint}
         />
         <Text style={[styles.label, { marginTop: 12 }]}>Departemen</Text>
-        <TextInput
-          style={styles.input}
+        <DepartmentDropdown
           value={editDept}
-          onChangeText={setEditDept}
-          placeholder="Departemen"
-          placeholderTextColor={colors.faint}
+          onChange={setEditDept}
+          departments={departments}
+          onDepartmentsChange={setDepartments}
+          placeholder="Pilih departemen"
         />
         <Button
           title={editSaving ? 'Menyimpan...' : 'Simpan perubahan'}
@@ -346,11 +346,55 @@ export const AdminEmployeeManager: React.FC<AdminEmployeeManagerProps> = ({
           style={{ marginTop: 16 }}
         />
       </Modal>
+
+      {/* Dialog Konfirmasi Hapus Akun Karyawan */}
+      <ConfirmDialog
+        visible={!!userToDelete}
+        onClose={() => setUserToDelete(null)}
+        onConfirm={confirmDelete}
+        title="Hapus Akun Karyawan?"
+        message={`Akun "${userToDelete?.fullName}" (${userToDelete?.email}) akan dihapus permanen beserta seluruh riwayat presensinya. Lanjutkan?`}
+        confirmText="Ya, Hapus"
+        cancelText="Batal"
+        icon="trash-2"
+        variant="danger"
+      />
+
+      {/* Dialog Konfirmasi Buka Kunci Perangkat */}
+      <ConfirmDialog
+        visible={!!userToResetDevice}
+        onClose={() => setUserToResetDevice(null)}
+        onConfirm={confirmResetDevice}
+        title="Buka Kunci Perangkat?"
+        message={`Karyawan "${userToResetDevice?.fullName}" akan bisa login dari HP baru. HP baru itu otomatis tersimpan sebagai perangkat resminya.`}
+        confirmText="Buka Kunci"
+        cancelText="Batal"
+        icon="smartphone"
+        variant="primary"
+      />
+
+      {/* Dialog Notifikasi Berhasil / Gagal */}
+      <ConfirmDialog
+        visible={!!feedbackModal}
+        onClose={() => setFeedbackModal(null)}
+        onConfirm={() => setFeedbackModal(null)}
+        title={feedbackModal?.title || ''}
+        message={feedbackModal?.message || ''}
+        confirmText="Tutup"
+        singleButton={true}
+        icon={feedbackModal?.variant === 'primary' ? 'check-circle' : 'alert-circle'}
+        variant={feedbackModal?.variant || 'primary'}
+      />
     </View>
   );
 };
 
 const styles = StyleSheet.create({
+  departmentPicker: { flexDirection: 'row', gap: 8, flexWrap: 'wrap' },
+  departmentOption: { borderWidth: 1, borderColor: colors.border, borderRadius: radius.md, paddingVertical: 10, paddingHorizontal: 16, backgroundColor: colors.surface },
+  departmentOptionActive: { backgroundColor: colors.primarySoft, borderColor: colors.primary },
+  departmentOptionText: { color: colors.muted, fontWeight: '600' },
+  departmentOptionTextActive: { color: colors.primaryDark },
   container: {
     paddingBottom: 20,
   },

@@ -1,6 +1,8 @@
 import React, { useState } from 'react';
 import {
   Alert,
+  Image,
+  Platform,
   ScrollView,
   StyleSheet,
   Text,
@@ -18,10 +20,11 @@ import { LeaveDetailModal } from './LeaveDetailModal';
 import { AdminEmployeeManager } from './AdminEmployeeManager';
 import { AdminEmployeeRecap } from './AdminEmployeeRecap';
 import { AdminApprovalQueue } from './AdminApprovalQueue';
+import { AdminDepartmentReport } from './AdminDepartmentReport';
 import { ConfirmDialog } from '../ui/ConfirmDialog';
 import { succeed, fail, select, tap } from '../../services/feedbackService';
 import { Feather } from '@expo/vector-icons';
-import { colors, fontSize, radius } from '../../theme';
+import { colors, fontSize, neoShadow, radius } from '../../theme';
 
 interface AdminDashboardProps {
   currentAdmin: UserProfile;
@@ -31,16 +34,17 @@ interface AdminDashboardProps {
   officeSettings: OfficeSettings;
   officeList: OfficeSettings[];
   onUpdateOfficeSettings: (newSettings: Partial<OfficeSettings>) => Promise<void>;
-  onRefreshOffices: () => void;
+  onRefreshOffices: () => Promise<void>;
   onRefreshUsers: () => void;
   onLogout: () => void;
   onPressProfile?: () => void;
 }
 
-type TabKey = 'monitoring' | 'geofence' | 'employees' | 'approval';
+type TabKey = 'monitoring' | 'report' | 'geofence' | 'employees' | 'approval';
 
 const TABS: Array<{ key: TabKey; label: string; icon: keyof typeof Feather.glyphMap }> = [
   { key: 'monitoring', label: 'Monitoring', icon: 'pie-chart' },
+  { key: 'report', label: 'Laporan', icon: 'bar-chart-2' },
   { key: 'geofence', label: 'Titik & Radius', icon: 'map' },
   { key: 'employees', label: 'Kelola Karyawan', icon: 'user-plus' },
   { key: 'approval', label: 'Persetujuan', icon: 'inbox' },
@@ -48,6 +52,7 @@ const TABS: Array<{ key: TabKey; label: string; icon: keyof typeof Feather.glyph
 
 const PAGE_META: Record<TabKey, { title: string; sub: string }> = {
   monitoring: { title: 'Monitoring Kehadiran', sub: 'Pantau absen karyawan hari ini' },
+  report: { title: 'Laporan Departemen', sub: 'Bandingkan kehadiran Sales, IT, dan Drafter' },
   geofence: { title: 'Titik & Radius', sub: 'Kelola lokasi dan radius absen kantor' },
   employees: { title: 'Kelola Karyawan', sub: 'Akun dan perangkat karyawan' },
   approval: { title: 'Persetujuan Izin', sub: 'Pengajuan yang menunggu keputusan' },
@@ -83,6 +88,12 @@ export const AdminDashboard: React.FC<AdminDashboardProps> = ({
 
   const clockedInUserIds = new Set(todayAttendances.map((a) => a.userId));
   const unabsentEmployees = employees.filter((e) => !clockedInUserIds.has(e.id));
+
+  const presentCount = luringCount + daringCount;
+  const presentPct = totalEmployees > 0 ? Math.round((presentCount / totalEmployees) * 100) : 0;
+  const leavePct = totalEmployees > 0 ? Math.round((izinSakitCount / totalEmployees) * 100) : 0;
+  const unabsentCount = unabsentEmployees.length;
+  const unabsentPct = totalEmployees > 0 ? Math.round((unabsentCount / totalEmployees) * 100) : 0;
 
   const confirmLogout = () => {
     tap();
@@ -120,28 +131,95 @@ export const AdminDashboard: React.FC<AdminDashboardProps> = ({
     <>
       {activeTab === 'monitoring' && (
         <>
-          {/* Stats Overview */}
-          <View style={styles.statsGrid}>
-            <View style={[styles.statCard, { width: isWide ? '23.5%' : '48.5%' }]}>
-              <Text style={styles.statNumber}>{totalEmployees}</Text>
-              <Text style={styles.statLabel}>Total Karyawan</Text>
+          {/* Live Operational Status Banner */}
+          <View style={[styles.statusBanner, neoShadow.md]}>
+            <View style={styles.statusBannerTop}>
+              <View style={styles.statusLiveWrap}>
+                <View style={styles.statusLiveDot} />
+                <Text style={styles.statusLiveText}>SISTEM AKTIF</Text>
+              </View>
+              <View style={styles.syncPill}>
+                <Feather name="refresh-cw" size={11} color={colors.muted} style={{ marginRight: 5 }} />
+                <Text style={styles.syncText}>Realtime Sync</Text>
+              </View>
+            </View>
+            <Text style={styles.statusTitle}>Monitoring & Analitik Kehadiran</Text>
+            <Text style={styles.statusDate}>
+              {new Date().toLocaleDateString('id-ID', { weekday: 'long', day: 'numeric', month: 'long', year: 'numeric' })}
+            </Text>
+          </View>
+
+          {/* 3 Real-time Attendance KPI Counters */}
+          <View style={styles.kpiContainer}>
+            {/* Card 1: Hadir Hari Ini */}
+            <View style={[styles.kpiCard, neoShadow.sm, isWide && styles.kpiCardWide]}>
+              <View style={styles.kpiContent}>
+                <View style={styles.kpiTopRow}>
+                  <View>
+                    <Text style={styles.kpiLabel}>Hadir Hari Ini</Text>
+                    <View style={styles.kpiValueRow}>
+                      <Text style={styles.kpiNumber}>{presentCount}</Text>
+                      <Text style={styles.kpiSub}>/ {totalEmployees} Karyawan</Text>
+                    </View>
+                  </View>
+                  <View style={[styles.kpiBadge, { backgroundColor: colors.primarySoft }]}>
+                    <Feather name="trending-up" size={13} color={colors.primary} style={{ marginRight: 4 }} />
+                    <Text style={[styles.kpiBadgeText, { color: colors.primaryDark }]}>{presentPct}%</Text>
+                  </View>
+                </View>
+                <View style={styles.kpiTrack}>
+                  <View style={[styles.kpiBar, { width: `${presentPct}%`, backgroundColor: colors.primary }]} />
+                </View>
+              </View>
             </View>
 
-            <View style={[styles.statCard, { width: isWide ? '23.5%' : '48.5%' }]}>
-              <Text style={[styles.statNumber, { color: colors.masuk }]}>{luringCount}</Text>
-              <Text style={styles.statLabel}>Absen Kantor</Text>
+            {/* Card 2: Izin / Sakit */}
+            <View style={[styles.kpiCard, neoShadow.sm, isWide && styles.kpiCardWide]}>
+              <View style={styles.kpiContent}>
+                <View style={styles.kpiTopRow}>
+                  <View>
+                    <Text style={styles.kpiLabel}>Izin / Sakit</Text>
+                    <View style={styles.kpiValueRow}>
+                      <Text style={styles.kpiNumber}>{izinSakitCount}</Text>
+                      <Text style={styles.kpiSub}>Karyawan</Text>
+                    </View>
+                  </View>
+                  <View style={[styles.kpiBadge, { backgroundColor: colors.izinSoft }]}>
+                    <Feather name="activity" size={13} color={colors.izin} style={{ marginRight: 4 }} />
+                    <Text style={[styles.kpiBadgeText, { color: colors.izin }]}>{leavePct}%</Text>
+                  </View>
+                </View>
+                <View style={styles.kpiTrack}>
+                  <View style={[styles.kpiBar, { width: `${leavePct}%`, backgroundColor: colors.izin }]} />
+                </View>
+              </View>
             </View>
 
-            <View style={[styles.statCard, { width: isWide ? '23.5%' : '48.5%' }]}>
-              <Text style={[styles.statNumber, { color: colors.primaryDark }]}>{daringCount}</Text>
-              <Text style={styles.statLabel}>Absen Rumah</Text>
-            </View>
-
-            <View style={[styles.statCard, { width: isWide ? '23.5%' : '48.5%' }]}>
-              <Text style={[styles.statNumber, { color: colors.izin }]}>{izinSakitCount}</Text>
-              <Text style={styles.statLabel}>Izin / Sakit</Text>
+            {/* Card 3: Belum Hadir / Alpa */}
+            <View style={[styles.kpiCard, neoShadow.sm, isWide && styles.kpiCardWide]}>
+              <View style={styles.kpiContent}>
+                <View style={styles.kpiTopRow}>
+                  <View>
+                    <Text style={styles.kpiLabel}>Belum Hadir / Alpa</Text>
+                    <View style={styles.kpiValueRow}>
+                      <Text style={styles.kpiNumber}>{unabsentCount}</Text>
+                      <Text style={styles.kpiSub}>Karyawan</Text>
+                    </View>
+                  </View>
+                  <View style={[styles.kpiBadge, { backgroundColor: colors.pulangSoft }]}>
+                    <Feather name="clock" size={13} color={colors.pulang} style={{ marginRight: 4 }} />
+                    <Text style={[styles.kpiBadgeText, { color: colors.pulang }]}>{unabsentPct}%</Text>
+                  </View>
+                </View>
+                <View style={styles.kpiTrack}>
+                  <View style={[styles.kpiBar, { width: `${unabsentPct}%`, backgroundColor: colors.pulang }]} />
+                </View>
+              </View>
             </View>
           </View>
+
+          {/* Department Breakdown Section */}
+          <AdminDepartmentReport users={users} />
 
           {/* Unabsent Employees Warning Banner */}
           <Card
@@ -192,6 +270,8 @@ export const AdminDashboard: React.FC<AdminDashboardProps> = ({
         </>
       )}
 
+      {activeTab === 'report' && <AdminDepartmentReport users={users} />}
+
       {activeTab === 'geofence' && (
         <GeofenceSettings
           offices={officeList.length > 0 ? officeList : [officeSettings]}
@@ -210,10 +290,7 @@ export const AdminDashboard: React.FC<AdminDashboardProps> = ({
           }}
           onDelete={async (id) => {
             const res = await AttendanceService.deleteOffice(id);
-            if (res.success) {
-              onRefreshOffices();
-              await onUpdateOfficeSettings({});
-            }
+            if (res.success) await onRefreshOffices();
             return { success: res.success, message: res.message };
           }}
         />
@@ -246,9 +323,11 @@ export const AdminDashboard: React.FC<AdminDashboardProps> = ({
         <View style={styles.webLayout}>
           <View style={styles.sidebar}>
             <View style={styles.brandRow}>
-              <View style={styles.brandIcon}>
-                <Feather name="check-square" size={20} color="#FFFFFF" />
-              </View>
+              <Image
+                source={require('../../../assets/skmi-logo3.png')}
+                style={styles.brandIcon}
+                resizeMode="contain"
+              />
               <View>
                 <Text style={styles.brandTitle}>E-Presensi</Text>
                 <Text style={styles.brandSub}>Panel Admin</Text>
@@ -463,7 +542,7 @@ const styles = StyleSheet.create({
   sidebar: {
     width: 250,
     backgroundColor: colors.surface,
-    borderRightWidth: 1,
+    borderRightWidth: 2,
     borderRightColor: colors.border,
     padding: 16,
   },
@@ -474,30 +553,26 @@ const styles = StyleSheet.create({
     paddingHorizontal: 4,
   },
   brandIcon: {
-    width: 40,
-    height: 40,
-    borderRadius: 10,
-    backgroundColor: colors.primary,
-    alignItems: 'center',
-    justifyContent: 'center',
+    width: 36,
+    height: 36,
     marginRight: 10,
   },
   brandTitle: {
-    fontSize: fontSize.md,
+    fontSize: fontSize.sm,
     fontWeight: '700',
     color: colors.ink,
   },
   brandSub: {
-    fontSize: fontSize.xs,
-    color: colors.muted,
-    fontWeight: '600',
+    fontSize: 11,
+    color: colors.primary,
+    fontWeight: '700',
   },
   sideNav: {
     flexDirection: 'row',
     alignItems: 'center',
-    paddingVertical: 12,
-    paddingHorizontal: 14,
-    borderRadius: 14,
+    paddingVertical: 10,
+    paddingHorizontal: 12,
+    borderRadius: radius.md,
     marginBottom: 4,
   },
   sideNavActive: {
@@ -506,20 +581,21 @@ const styles = StyleSheet.create({
   sideNavText: {
     flex: 1,
     fontSize: fontSize.sm,
-    fontWeight: '700',
+    fontWeight: '600',
     color: colors.muted,
   },
   sideNavTextActive: {
     color: colors.primaryDark,
+    fontWeight: '700',
   },
   countBadge: {
-    minWidth: 24,
-    height: 24,
-    borderRadius: 12,
-    backgroundColor: colors.primary,
+    minWidth: 20,
+    height: 20,
+    borderRadius: radius.sm,
+    backgroundColor: colors.secondary,
     alignItems: 'center',
     justifyContent: 'center',
-    paddingHorizontal: 6,
+    paddingHorizontal: 5,
   },
   countText: {
     fontSize: 12,
@@ -569,20 +645,20 @@ const styles = StyleSheet.create({
     alignItems: 'center',
   },
   adminAvatar: {
-    width: 40,
-    height: 40,
-    borderRadius: 20,
+    width: 34,
+    height: 34,
+    borderRadius: radius.md,
     backgroundColor: colors.primarySoft,
-    borderWidth: 1,
-    borderColor: colors.border,
+    borderWidth: 1.5,
+    borderColor: colors.primaryBorder,
     alignItems: 'center',
     justifyContent: 'center',
-    marginRight: 10,
+    marginRight: 8,
   },
   adminAvatarText: {
-    fontSize: fontSize.xs,
+    fontSize: 12,
     fontWeight: '700',
-    color: colors.primaryDark,
+    color: colors.primary,
   },
   adminName: {
     fontSize: fontSize.sm,
@@ -593,6 +669,130 @@ const styles = StyleSheet.create({
     fontSize: fontSize.xs,
     color: colors.muted,
     fontWeight: '600',
+  },
+  statusBanner: {
+    backgroundColor: colors.surface,
+    borderWidth: 1,
+    borderColor: colors.border,
+    borderRadius: radius.lg,
+    padding: 16,
+    marginBottom: 14,
+  },
+  statusBannerTop: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    alignItems: 'center',
+    marginBottom: 8,
+  },
+  statusLiveWrap: {
+    flexDirection: 'row',
+    alignItems: 'center',
+  },
+  statusLiveDot: {
+    width: 7,
+    height: 7,
+    borderRadius: 3.5,
+    backgroundColor: colors.primary,
+    marginRight: 6,
+  },
+  statusLiveText: {
+    fontSize: 11,
+    fontWeight: '800',
+    letterSpacing: 0.8,
+    color: colors.primary,
+  },
+  syncPill: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    backgroundColor: colors.surfaceSoft,
+    paddingHorizontal: 8,
+    paddingVertical: 3,
+    borderRadius: radius.sm,
+    borderWidth: 1,
+    borderColor: colors.border,
+  },
+  syncText: {
+    fontSize: 11,
+    fontWeight: '600',
+    color: colors.muted,
+  },
+  statusTitle: {
+    fontSize: fontSize.md,
+    fontWeight: '700',
+    color: colors.ink,
+  },
+  statusDate: {
+    fontSize: fontSize.xs,
+    color: colors.muted,
+    marginTop: 2,
+  },
+  kpiContainer: {
+    flexDirection: 'row',
+    flexWrap: 'wrap',
+    gap: 10,
+    marginBottom: 14,
+  },
+  kpiCard: {
+    width: '100%',
+    backgroundColor: colors.surface,
+    borderWidth: 1,
+    borderColor: colors.border,
+    borderRadius: radius.lg,
+    overflow: 'hidden',
+  },
+  kpiCardWide: {
+    width: '31.8%',
+  },
+  kpiContent: {
+    padding: 14,
+  },
+  kpiTopRow: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    alignItems: 'flex-start',
+    marginBottom: 10,
+  },
+  kpiLabel: {
+    fontSize: fontSize.xs,
+    color: colors.muted,
+    fontWeight: '600',
+  },
+  kpiValueRow: {
+    flexDirection: 'row',
+    alignItems: 'baseline',
+    marginTop: 4,
+    gap: 6,
+  },
+  kpiNumber: {
+    fontSize: fontSize.xl,
+    fontWeight: '800',
+    color: colors.ink,
+  },
+  kpiSub: {
+    fontSize: fontSize.xs,
+    color: colors.muted,
+    fontWeight: '500',
+  },
+  kpiBadge: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    paddingHorizontal: 8,
+    paddingVertical: 4,
+    borderRadius: radius.sm,
+  },
+  kpiBadgeText: {
+    fontSize: 12,
+    fontWeight: '700',
+  },
+  kpiTrack: {
+    height: 6,
+    borderRadius: 3,
+    backgroundColor: colors.surfaceSoft,
+    overflow: 'hidden',
+  },
+  kpiBar: {
+    height: '100%',
+    borderRadius: 3,
   },
   statsGrid: {
     flexDirection: 'row',
@@ -674,17 +874,14 @@ const styles = StyleSheet.create({
     position: 'absolute',
     bottom: 22,
     right: 20,
-    width: 58,
-    height: 58,
-    borderRadius: 29,
+    width: 48,
+    height: 48,
+    borderRadius: radius.lg,
     backgroundColor: '#DC2626',
+    borderWidth: 1,
+    borderColor: '#B91C1C',
     alignItems: 'center',
     justifyContent: 'center',
-    shadowColor: '#DC2626',
-    shadowOffset: { width: 0, height: 4 },
-    shadowOpacity: 0.35,
-    shadowRadius: 8,
-    elevation: 8,
     zIndex: 40,
   },
 });

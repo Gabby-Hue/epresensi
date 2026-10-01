@@ -33,11 +33,13 @@ import { Badge } from '../ui/Badge';
 import { CameraModal } from './CameraModal';
 import { LeaveRequestForm } from './LeaveRequestForm';
 import { MonthAttendanceCalendar } from './MonthAttendanceCalendar';
+import { ProfileScreen } from './ProfileScreen';
+import { BottomNavBar, UserTabKey } from '../ui/BottomNavBar';
 import { StorageService } from '../../services/storageService';
 import { succeed, fail, select } from '../../services/feedbackService';
 import { isWeekendDateString } from '../../utils/dates';
 import { Feather } from '@expo/vector-icons';
-import { colors, fontSize, radius, spacing } from '../../theme';
+import { colors, fontSize, neoShadow, radius, spacing } from '../../theme';
 
 interface AttendanceHubProps {
   user: UserProfile;
@@ -60,6 +62,7 @@ interface AttendanceHubProps {
     documentUrl?: string;
   }) => Promise<void>;
   onLogout: () => void;
+  onUpdateUser?: (updated: UserProfile) => void;
 }
 
 // Awal minggu (Senin jam 00:00) untuk filter "Kehadiran Minggu Ini".
@@ -98,9 +101,10 @@ export const AttendanceHub: React.FC<AttendanceHubProps> = ({
   userHistory,
   onClockIn,
   onLogout,
+  onUpdateUser,
 }) => {
   const offices = officeList.length > 0 ? officeList : [officeSettings];
-  const [currentPage, setCurrentPage] = useState<'dashboard' | 'leave_form'>('dashboard');
+  const [activeTab, setActiveTab] = useState<UserTabKey | 'izin'>('presensi');
   const [mode, setMode] = useState<'masuk' | 'pulang'>('masuk');
   const [place, setPlace] = useState<'kantor' | 'rumah'>('kantor');
   const [currentDistance, setCurrentDistance] = useState<number | null>(null);
@@ -130,8 +134,12 @@ export const AttendanceHub: React.FC<AttendanceHubProps> = ({
   const [calYear, setCalYear] = useState(() => new Date().getFullYear());
   const [calMonth, setCalMonth] = useState(() => new Date().getMonth());
   const [calDay, setCalDay] = useState<number | null>(null);
+  const [currentTime, setCurrentTime] = useState(() => new Date());
 
-  const [showScrollTop, setShowScrollTop] = useState(false);
+  useEffect(() => {
+    const timer = setInterval(() => setCurrentTime(new Date()), 1000);
+    return () => clearInterval(timer);
+  }, []);
 
   // Toast "belum absen" — muncul sesaat menggantung dari atas, oranye, bisa disilang.
   const [toastVisible, setToastVisible] = useState(false);
@@ -207,7 +215,62 @@ export const AttendanceHub: React.FC<AttendanceHubProps> = ({
     weekday: 'long',
     day: 'numeric',
     month: 'long',
+    year: 'numeric',
   });
+
+  // Waktu real-time & salam
+  const curHour = currentTime.getHours();
+  const curMin = currentTime.getMinutes();
+  const curSec = currentTime.getSeconds();
+  const currentTimeString = `${String(curHour).padStart(2, '0')}:${String(curMin).padStart(2, '0')}:${String(curSec).padStart(2, '0')}`;
+
+  const getGreeting = (h: number) => {
+    if (h >= 4 && h < 11) return 'Selamat Pagi';
+    if (h >= 11 && h < 15) return 'Selamat Siang';
+    if (h >= 15 && h < 18) return 'Selamat Sore';
+    return 'Selamat Malam';
+  };
+  const greeting = getGreeting(curHour);
+
+  // Aturan jam datang: 08:00 - 10:00 (sebelum 08:00 tetap sah tepat waktu).
+  // Lewat pukul 10:00 dikategorikan Terlambat.
+  const isLateCheckIn = curHour > 10 || (curHour === 10 && curMin > 0);
+
+  // Aturan jam pulang: terkunci sebelum pukul 17:00 WIB hingga batas 00:00 (23:59:59).
+  const isClockOutUnlocked = curHour >= 17;
+
+  // Inisial foto profil
+  const initials = user.fullName
+    .split(' ')
+    .map((w) => w[0])
+    .slice(0, 2)
+    .join('')
+    .toUpperCase();
+
+  // Rekap Presensi Bulan Ini (ala Stitch Enterprise: Hadir Tepat, Terlambat, Izin/Cuti)
+  const currentMonthStart = getMonthStart();
+  const currentMonthName = new Date().toLocaleDateString('id-ID', { month: 'long' });
+  const monthAllRecords = userHistory.filter((r) => new Date(r.clockInTime) >= currentMonthStart);
+
+  const onTimeCount = monthAllRecords.filter((r) => {
+    if (r.sessionType !== 'masuk') return false;
+    const d = new Date(r.clockInTime);
+    const h = d.getHours();
+    const m = d.getMinutes();
+    return h < 10 || (h === 10 && m === 0);
+  }).length;
+
+  const lateCount = monthAllRecords.filter((r) => {
+    if (r.sessionType !== 'masuk') return false;
+    const d = new Date(r.clockInTime);
+    const h = d.getHours();
+    const m = d.getMinutes();
+    return h > 10 || (h === 10 && m > 0);
+  }).length;
+
+  const leaveCount = monthAllRecords.filter(
+    (r) => r.type === 'izin_sakit' || r.sessionType === 'izin_sakit'
+  ).length;
 
   // ---- Data untuk tombol & logs (khusus sesi masuk / pulang) ----
   const todayStr = new Date().toISOString().split('T')[0];
@@ -224,6 +287,15 @@ export const AttendanceHub: React.FC<AttendanceHubProps> = ({
   const monthLogs = masukPulangLogs.filter((r) => new Date(r.clockInTime) >= monthStart);
 
   const handleMainAction = () => {
+    // Jika memilih mode pulang dan belum jam 17:00 WIB
+    if (mode === 'pulang' && !isClockOutUnlocked) {
+      setBlockedMessage(
+        'Presensi pulang saat ini terkunci. Sesuai jam operasional, presensi pulang hanya dapat direkam mulai pukul 17:00 hingga 00:00 WIB.'
+      );
+      setShowBlockedDialog(true);
+      return;
+    }
+
     // Jika memilih dari rumah dan alasan masih kosong
     if (place === 'rumah' && !reason.trim()) {
       setReasonTouched(true);
@@ -247,10 +319,44 @@ export const AttendanceHub: React.FC<AttendanceHubProps> = ({
     setCameraVisible(true);
   };
 
-  const handleLeaveFormSubmit = (data: { startDate: string; endDate: string; reason: string; documentUrl?: string }) => {
-    setPendingLeaveData(data);
-    setCurrentPage('dashboard');
-    setCameraVisible(true);
+  const handleLeaveFormSubmit = async (data: {
+    startDate: string;
+    endDate: string;
+    reason: string;
+    documentUrl?: string;
+  }) => {
+    setSubmitting(true);
+    try {
+      let publicDocUrl: string | undefined = undefined;
+      const localDoc = data.documentUrl;
+      if (localDoc && !localDoc.startsWith('http')) {
+        const fileName = localDoc.split('/').pop() || 'dokumen';
+        publicDocUrl = await StorageService.uploadDocument(user.id, fileName, localDoc);
+      } else if (localDoc) {
+        publicDocUrl = localDoc;
+      }
+
+      await onClockIn({
+        type: 'izin_sakit',
+        sessionType: 'izin_sakit',
+        reason: data.reason,
+        startDate: data.startDate,
+        endDate: data.endDate,
+        documentUrl: publicDocUrl,
+      });
+
+      succeed();
+      Alert.alert(
+        'Berhasil',
+        'Pengajuan izin/sakit berhasil dikirim dan menunggu persetujuan admin.'
+      );
+      setActiveTab('presensi');
+    } catch (e: any) {
+      fail();
+      Alert.alert('Gagal Mengajukan', e?.message || 'Pengajuan gagal dikirim. Silakan coba lagi.');
+    } finally {
+      setSubmitting(false);
+    }
   };
 
   const handleConfirmPhotoSubmit = async (photoUri: string) => {
@@ -281,6 +387,15 @@ export const AttendanceHub: React.FC<AttendanceHubProps> = ({
         });
         setPendingLeaveData(null);
       } else {
+        const now = new Date();
+        const h = now.getHours();
+        const m = now.getMinutes();
+        const isLate = mode === 'masuk' && (h > 10 || (h === 10 && m > 0));
+        let finalReason = place === 'rumah' ? reason.trim() : undefined;
+        if (isLate) {
+          finalReason = finalReason ? `${finalReason} (Terlambat: Masuk > 10:00)` : 'Terlambat (> 10:00 WIB)';
+        }
+
         await onClockIn({
           type: place === 'kantor' ? 'luring' : 'daring',
           sessionType: mode,
@@ -289,7 +404,7 @@ export const AttendanceHub: React.FC<AttendanceHubProps> = ({
           distanceMeters: currentDistance || 0,
           officeName: place === 'kantor' ? nearestOffice.officeName : undefined,
           officeColor: place === 'kantor' ? nearestOffice.color : undefined,
-          reason: place === 'rumah' ? reason : undefined,
+          reason: finalReason,
           photoUrl: publicPhotoUrl,
         });
         setReason('');
@@ -300,7 +415,7 @@ export const AttendanceHub: React.FC<AttendanceHubProps> = ({
         'Berhasil',
         pendingLeaveData
           ? 'Pengajuan dikirim dan menunggu persetujuan admin.'
-          : 'Absensi Anda sudah tersimpan di Supabase (foto, tanggal, jam, nama).'
+          : 'Absensi Anda sudah tersimpan di sistem (foto, tanggal, jam, status).'
       );
     } catch (e: any) {
       fail();
@@ -310,7 +425,14 @@ export const AttendanceHub: React.FC<AttendanceHubProps> = ({
     }
   };
 
-  const mainButtonTitle = mode === 'masuk' ? 'Absen Masuk' : 'Absen Pulang';
+  const mainButtonTitle =
+    mode === 'masuk'
+      ? isLateCheckIn
+        ? 'Absen Masuk (Terlambat)'
+        : 'Absen Masuk (Tepat Waktu)'
+      : !isClockOutUnlocked
+        ? 'Presensi Pulang Terkunci (Buka 17:00)'
+        : 'Absen Pulang';
 
   const renderLogRow = (item: AttendanceRecord) => {
     const isMasuk = item.sessionType === 'masuk';
@@ -371,330 +493,357 @@ export const AttendanceHub: React.FC<AttendanceHubProps> = ({
     </View>
   );
 
-  // Jika sedang di halaman formulir izin / sakit
-  if (currentPage === 'leave_form') {
-    return (
-      <View style={styles.outer}>
-        <LeaveRequestForm
-          onSubmit={handleLeaveFormSubmit}
-          onBack={() => setCurrentPage('dashboard')}
-        />
-        <CameraModal
-          visible={cameraVisible}
-          onClose={() => {
-            setCameraVisible(false);
-            setPendingLeaveData(null);
-          }}
-          onConfirmPhoto={handleConfirmPhotoSubmit}
-          attendanceTypeLabel="Izin / Sakit"
-        />
-      </View>
-    );
-  }
-
-  return (
-    <View style={styles.outer}>
-      {/* Toast "belum absen" — menggantung dari atas, oranye, auto-hilang + silang */}
+  const renderPresensiTab = () => (
+    <View style={{ flex: 1 }}>
+      {/* Toast "belum absen" */}
       {toastVisible && (
-        <Animated.View style={[styles.toast, { transform: [{ translateY: toastSlide }] }]}>
-          <Feather name="alert-circle" size={20} color="#FFFFFF" style={{ marginRight: 10 }} />
-          <Text style={styles.toastText}>Anda belum absen hari ini. Yuk, absen dulu di bawah.</Text>
+        <Animated.View style={[styles.toast, neoShadow.md, { transform: [{ translateY: toastSlide }] }]}>
+          <Feather name="alert-circle" size={18} color="#FFFFFF" style={{ marginRight: 8 }} />
+          <Text style={styles.toastText}>Anda belum melakukan presensi hari ini.</Text>
           <TouchableOpacity onPress={dismissToast} hitSlop={12} style={styles.toastClose}>
-            <Feather name="x" size={20} color="#FFFFFF" />
+            <Feather name="x" size={18} color="#FFFFFF" />
           </TouchableOpacity>
         </Animated.View>
       )}
+
       <ScrollView
         ref={scrollRef}
         showsVerticalScrollIndicator={false}
         contentContainerStyle={styles.scroll}
         keyboardShouldPersistTaps="handled"
-        onScroll={(e) => {
-          const offsetY = e.nativeEvent.contentOffset.y;
-          if (offsetY > 250) {
-            if (!showScrollTop) setShowScrollTop(true);
-          } else {
-            if (showScrollTop) setShowScrollTop(false);
-          }
-        }}
-        scrollEventThrottle={16}
       >
-        {/* Kartu status hanya tampil kalau sudah absen — kalau belum, cukup toast di atas */}
-        {userTodayStatus && (
-        <Card style={styles.statusCard}>
-          <View style={styles.statusRow}>
-            <Feather
-              name={userTodayStatus ? 'check-circle' : 'clock'}
-              size={28}
-              color={userTodayStatus ? colors.primary : colors.faint}
-            />
-            <View style={styles.statusText}>
-              <Text style={styles.statusTitle}>
-                {userTodayStatus
-                  ? `Sudah absen ${userTodayStatus.sessionType === 'pulang' ? 'pulang' : 'masuk'} jam ${new Date(userTodayStatus.clockInTime).toLocaleTimeString('id-ID', { hour: '2-digit', minute: '2-digit' })}`
-                  : 'Belum absen hari ini'}
+        {/* 1. Header Profil & Telemetri Waktu */}
+        <View style={styles.masthead}>
+          <View style={styles.mastheadTopRow}>
+            <View style={styles.employeeInfo}>
+              <Text style={styles.greetingText}>{greeting},</Text>
+              <Text style={styles.employeeName} numberOfLines={1}>
+                {user.fullName}
               </Text>
-              <Text style={styles.statusSub}>
-                {userTodayStatus ? 'Terima kasih, kehadiran tercatat.' : 'Yuk, absen dulu di bawah.'}
+              <Text style={styles.employeeMeta}>
+                {user.department || 'Operasional'} • ID {user.id ? `EP-${String(user.id).padStart(4, '0')}` : 'EP-0001'}
+              </Text>
+            </View>
+
+            <View style={styles.clockTelemetry}>
+              <Text style={styles.clockDigits}>{currentTimeString}</Text>
+              <Text style={styles.clockDateText}>{todayLabel}</Text>
+            </View>
+          </View>
+
+          <View style={styles.mastheadDivider} />
+
+          <View style={styles.mastheadBottomRow}>
+            <View style={styles.shiftCol}>
+              <Text style={styles.bottomRowLabel}>Jadwal Shift</Text>
+              <View style={styles.shiftValueRow}>
+                <Text style={styles.shiftTimeText}>08:00 – 17:00</Text>
+                <Text style={isLateCheckIn ? styles.lateStatusText : styles.onTimeStatusText}>
+                  • {isLateCheckIn ? 'Terlambat (> 10:00)' : 'Tepat Waktu'}
+                </Text>
+              </View>
+            </View>
+
+            <TouchableOpacity
+              activeOpacity={0.7}
+              onPress={() => {
+                select();
+                setActiveTab('kalender');
+              }}
+              style={styles.recapLink}
+            >
+              <View style={{ alignItems: 'flex-end' }}>
+                <Text style={styles.bottomRowLabel}>Bulan Ini</Text>
+                <Text style={styles.recapValueText}>
+                  {onTimeCount} Hadir • {leaveCount} Izin
+                </Text>
+              </View>
+              <Feather name="chevron-right" size={16} color={colors.primary} style={{ marginLeft: 6 }} />
+            </TouchableOpacity>
+          </View>
+        </View>
+
+        {/* Banner Status Presensi Hari Ini (Jika sudah pernah absen) */}
+        {userTodayStatus && (
+          <View style={[styles.todaySuccessBanner, neoShadow.sm]}>
+            <Feather name="check-circle" size={18} color={colors.successInk} style={{ marginRight: 8 }} />
+            <View style={{ flex: 1 }}>
+              <Text style={styles.todaySuccessTitle}>
+                Sudah absen {userTodayStatus.sessionType === 'pulang' ? 'pulang' : 'masuk'} jam {new Date(userTodayStatus.clockInTime).toLocaleTimeString('id-ID', { hour: '2-digit', minute: '2-digit' })} WIB
               </Text>
               {lastSavedAt && (
-                <Text style={styles.savedNote}>
-                  Terakhir tersimpan {new Date(lastSavedAt).toLocaleTimeString('id-ID', { hour: '2-digit', minute: '2-digit' })} ke Supabase
+                <Text style={styles.todaySuccessSub}>
+                  Tersimpan di server: {new Date(lastSavedAt).toLocaleTimeString('id-ID', { hour: '2-digit', minute: '2-digit' })}
                 </Text>
               )}
             </View>
           </View>
-        </Card>
         )}
 
-        {/* 1. Pilih Kehadiran — Masuk & Pulang sejajar */}
-        <Text style={styles.sectionTitle}>Pilih Kehadiran</Text>
-        <View style={styles.duoRow}>
-          <TouchableOpacity
-            activeOpacity={0.85}
-            onPress={() => {
-              select();
-              setMode('masuk');
-            }}
-            style={[
-              styles.actionBtn,
-              mode === 'masuk' && { backgroundColor: colors.masuk, borderColor: colors.masuk },
-            ]}
-          >
-            <Feather name="sunrise" size={20} color={mode === 'masuk' ? '#FFFFFF' : colors.masuk} />
-            <Text style={[styles.actionText, mode === 'masuk' && styles.actionTextActive]}>Masuk</Text>
-            <Text style={[styles.actionSub, mode === 'masuk' && styles.actionTextActive]}>
-              {todayMasuk ? formatLogTime(todayMasuk.clockInTime) : 'Datang'}
-            </Text>
-          </TouchableOpacity>
-          <TouchableOpacity
-            activeOpacity={0.85}
-            onPress={() => {
-              select();
-              setMode('pulang');
-            }}
-            style={[
-              styles.actionBtn,
-              mode === 'pulang' && { backgroundColor: colors.pulang, borderColor: colors.pulang },
-            ]}
-          >
-            <Feather name="sunset" size={20} color={mode === 'pulang' ? '#FFFFFF' : colors.pulang} />
-            <Text style={[styles.actionText, mode === 'pulang' && styles.actionTextActive]}>Pulang</Text>
-            <Text style={[styles.actionSub, mode === 'pulang' && styles.actionTextActive]}>
-              {todayPulang ? formatLogTime(todayPulang.clockInTime) : 'Pulang kerja'}
-            </Text>
-          </TouchableOpacity>
-        </View>
+        {/* 2. THE UNIFIED ATTENDANCE WORKBENCH CONSOLE */}
+        <View style={[styles.consoleCard, neoShadow.md]}>
+          {/* A. Session Selector (Masuk / Pulang / Pengajuan Izin) */}
+          <View style={styles.segmentedConsole}>
+            <TouchableOpacity
+              activeOpacity={0.8}
+              onPress={() => {
+                select();
+                setMode('masuk');
+              }}
+              style={[styles.segmentBtn, mode === 'masuk' && styles.segmentBtnActive]}
+            >
+              <Feather name="sunrise" size={16} color={mode === 'masuk' ? colors.masuk : colors.muted} style={{ marginBottom: 2 }} />
+              <Text style={[styles.segmentText, mode === 'masuk' && styles.segmentTextActive]}>
+                Masuk
+              </Text>
+              <Text style={[styles.segmentSub, mode === 'masuk' && { color: colors.masuk }]}>
+                {todayMasuk ? formatLogTime(todayMasuk.clockInTime) : 'Batas 10:00'}
+              </Text>
+            </TouchableOpacity>
 
-        {/* 2. Tombol Navigasi ke Halaman Izin / Sakit */}
-        <TouchableOpacity
-          activeOpacity={0.85}
-          onPress={() => setCurrentPage('leave_form')}
-          style={styles.izinCard}
-        >
-          <View style={styles.izinIconWrap}>
-            <Feather name="file-text" size={22} color={colors.izin} />
+            <TouchableOpacity
+              activeOpacity={0.8}
+              onPress={() => {
+                select();
+                if (!isClockOutUnlocked) {
+                  setBlockedMessage(
+                    'Presensi pulang terkunci sebelum pukul 17:00 WIB sesuai jam operasional kantor.'
+                  );
+                  setShowBlockedDialog(true);
+                  return;
+                }
+                setMode('pulang');
+              }}
+              style={[
+                styles.segmentBtn,
+                mode === 'pulang' && styles.segmentBtnActive,
+                !isClockOutUnlocked && styles.segmentBtnLocked,
+              ]}
+            >
+              <Feather
+                name={!isClockOutUnlocked ? 'lock' : 'sunset'}
+                size={16}
+                color={mode === 'pulang' ? colors.pulang : !isClockOutUnlocked ? colors.faint : colors.muted}
+                style={{ marginBottom: 2 }}
+              />
+              <Text style={[
+                styles.segmentText,
+                mode === 'pulang' && styles.segmentTextActive,
+                !isClockOutUnlocked && { color: colors.faint },
+              ]}>
+                Pulang {!isClockOutUnlocked ? '(Kunci)' : ''}
+              </Text>
+              <Text style={[styles.segmentSub, mode === 'pulang' && { color: colors.pulang }]}>
+                {todayPulang ? formatLogTime(todayPulang.clockInTime) : !isClockOutUnlocked ? 'Buka 17:00' : '17:00 – 00:00'}
+              </Text>
+            </TouchableOpacity>
           </View>
-          <View style={styles.izinTextWrap}>
-            <Text style={styles.izinTitle}>
-              Absensi / Izin / Sakit
-            </Text>
-            <Text style={styles.izinSub}>
-              Buka formulir pengajuan izin atau sakit
-            </Text>
-          </View>
-          <View style={styles.izinArrow}>
-            <Feather
-              name="chevron-right"
-              size={20}
-              color={colors.ink}
-            />
-          </View>
-        </TouchableOpacity>
 
-        {/* Lokasi absen: kantor / rumah */}
-        <Text style={styles.sectionTitle}>Lokasi Absen</Text>
-        <View style={styles.duoRow}>
-          <TouchableOpacity
-            activeOpacity={0.85}
-            onPress={() => {
-              select();
-              setPlace('kantor');
-            }}
-            style={[styles.placeBtn, place === 'kantor' && styles.placeBtnActive]}
-          >
-            <Feather name="briefcase" size={22} color={place === 'kantor' ? '#FFFFFF' : colors.primary} />
-            <Text style={[styles.placeText, place === 'kantor' && styles.actionTextActive]}>Kantor</Text>
-          </TouchableOpacity>
-          <TouchableOpacity
-            activeOpacity={0.85}
-            onPress={() => {
-              select();
-              setPlace('rumah');
-            }}
-            style={[styles.placeBtn, place === 'rumah' && styles.placeBtnActive]}
-          >
-            <Feather name="home" size={22} color={place === 'rumah' ? '#FFFFFF' : colors.primary} />
-            <Text style={[styles.placeText, place === 'rumah' && styles.actionTextActive]}>Rumah</Text>
-          </TouchableOpacity>
-        </View>
-
-        {place === 'rumah' && (
-          <View
-            onLayout={(e) => {
-              setReasonCardY(e.nativeEvent.layout.y);
-            }}
-          >
-            <Card>
-              <Text
-                style={[
-                  styles.label,
-                  reasonTouched && !reason.trim() && { color: colors.danger },
-                ]}
+          {/* B. Location Mode Switch (Di Kantor vs Dari Rumah) */}
+          <View style={styles.locationToggleRow}>
+            <Text style={styles.locationSectionLabel}>Lokasi Presensi</Text>
+            <View style={styles.locationPillSwitch}>
+              <TouchableOpacity
+                activeOpacity={0.8}
+                onPress={() => {
+                  select();
+                  setPlace('kantor');
+                }}
+                style={[styles.locationPillBtn, place === 'kantor' && styles.locationPillActive]}
               >
+                <Feather name="briefcase" size={13} color={place === 'kantor' ? '#FFFFFF' : colors.muted} style={{ marginRight: 4 }} />
+                <Text style={[styles.locationPillText, place === 'kantor' && styles.locationPillTextActive]}>
+                  Di Kantor
+                </Text>
+              </TouchableOpacity>
+              <TouchableOpacity
+                activeOpacity={0.8}
+                onPress={() => {
+                  select();
+                  setPlace('rumah');
+                }}
+                style={[styles.locationPillBtn, place === 'rumah' && styles.locationPillActive]}
+              >
+                <Feather name="home" size={13} color={place === 'rumah' ? '#FFFFFF' : colors.muted} style={{ marginRight: 4 }} />
+                <Text style={[styles.locationPillText, place === 'rumah' && styles.locationPillTextActive]}>
+                  Dari Rumah
+                </Text>
+              </TouchableOpacity>
+            </View>
+          </View>
+
+          {/* Reason Input if "Dari Rumah" */}
+          {place === 'rumah' && (
+            <View
+              onLayout={(e) => setReasonCardY(e.nativeEvent.layout.y)}
+              style={styles.reasonContainer}
+            >
+              <Text style={[styles.reasonLabel, reasonTouched && !reason.trim() && { color: colors.danger }]}>
                 Alasan kerja dari rumah (wajib)
               </Text>
               <TextInput
                 ref={reasonInputRef}
-                style={[
-                  styles.input,
-                  reasonTouched && !reason.trim() && styles.inputError,
-                ]}
-                placeholder="Contoh: dinas luar kota"
+                style={[styles.reasonInput, reasonTouched && !reason.trim() && styles.reasonInputError]}
+                placeholder="Contoh: dinas luar kota / penugasan WFH"
                 placeholderTextColor={colors.faint}
                 value={reason}
                 onChangeText={(text) => {
                   setReason(text);
-                  if (text.trim().length > 0 && reasonTouched) {
-                    setReasonTouched(false);
-                  }
+                  if (text.trim().length > 0 && reasonTouched) setReasonTouched(false);
                 }}
               />
               {reasonTouched && !reason.trim() && (
-                <Text style={styles.fieldError}>Isi alasan dulu sebelum menekan tombol absen.</Text>
+                <Text style={styles.fieldError}>Isi alasan sebelum melakukan presensi.</Text>
               )}
-            </Card>
-          </View>
-        )}
+            </View>
+          )}
 
-        {/* 3. Div terpisah — Lokasimu Saat Ini + peta */}
-        <Text style={styles.sectionTitle}>Lokasimu Saat Ini</Text>
-        <Card>
-          <MapView
-            userLat={currentCoords.latitude}
-            userLng={currentCoords.longitude}
-            officeLat={nearestOffice.latitude}
-            officeLng={nearestOffice.longitude}
-            radiusMeters={nearestOffice.radiusMeters}
-            offices={offices}
-            activeOfficeId={nearestOffice.id}
-            mainColor={nearestOffice.color}
-            height={200}
-          />
-          <View style={styles.officeBadge}>
-            <Feather name="map-pin" size={16} color={colors.primary} style={{ marginRight: 6 }} />
-            <Text style={styles.officeBadgeText}>
-              {place === 'kantor' ? (
-                <>
-                  <Text style={{ color: nearestOffice.color }}>● </Text>
-                  Kantor terdekat: {nearestOffice.officeName}
-                </>
-              ) : (
-                'Mode: dari rumah'
-              )}
-            </Text>
+          {/* C. Interactive Geofence Map */}
+          <View style={styles.mapContainer}>
+            <MapView
+              userLat={currentCoords.latitude}
+              userLng={currentCoords.longitude}
+              officeLat={nearestOffice.latitude}
+              officeLng={nearestOffice.longitude}
+              radiusMeters={nearestOffice.radiusMeters}
+              offices={offices}
+              activeOfficeId={nearestOffice.id}
+              mainColor={nearestOffice.color}
+              height={180}
+            />
           </View>
-          <View style={styles.locRow}>
-            <Text style={styles.locText}>
-              {locLoading ? 'Mengukur jarak...' : gpsStale || currentDistance === null ? 'Jarak: belum valid' : `Jarak: ${formatDistance(currentDistance)}`}
-            </Text>
-            <TouchableOpacity onPress={fetchLocation} style={styles.refresh} hitSlop={12}>
-              <Feather name="refresh-cw" size={18} color={colors.primary} />
-              <Text style={styles.refreshText}>Cek ulang</Text>
+
+          {/* D. Live GPS Telemetry Strip */}
+          <View style={styles.radarTelemetryBar}>
+            <View style={{ flexDirection: 'row', alignItems: 'center', flex: 1, minWidth: 0 }}>
+              <View style={[styles.radarIndicatorDot, { backgroundColor: isWithinRadius ? colors.success : colors.warning }]} />
+              <Text style={styles.radarStatusText} numberOfLines={1}>
+                {place === 'kantor' ? (
+                  `${nearestOffice.officeName} • ${locLoading ? 'Mengukur...' : currentDistance !== null ? formatDistance(currentDistance) : 'Mencari GPS'} (${isWithinRadius ? 'Dalam Radius' : 'Di Luar Radius'})`
+                ) : (
+                  'Mode Presensi dari Rumah'
+                )}
+              </Text>
+            </View>
+            <TouchableOpacity onPress={fetchLocation} style={styles.radarRefreshBtn} hitSlop={10}>
+              <Feather name="refresh-cw" size={13} color={colors.primary} />
+              <Text style={styles.radarRefreshText}>Cek GPS</Text>
             </TouchableOpacity>
           </View>
+
           {(locError || gpsStale) && (
             <View style={styles.warnBanner}>
-              <Feather name="alert-triangle" size={18} color={colors.danger} style={{ marginRight: 8 }} />
-              <Text style={styles.warnText}>{locError || 'GPS belum valid.'}</Text>
+              <Feather name="alert-triangle" size={16} color={colors.danger} style={{ marginRight: 6 }} />
+              <Text style={styles.warnText}>{locError || 'GPS belum valid. Aktifkan lokasi perangkat Anda.'}</Text>
             </View>
           )}
+
+          {/* E. Definitive Primary Attendance Action Button */}
           <Button
             title={submitting ? 'Menyimpan...' : mainButtonTitle}
-            icon="camera"
+            icon={mode === 'pulang' && !isClockOutUnlocked ? 'lock' : 'camera'}
             loading={submitting}
+            disabled={mode === 'pulang' && !isClockOutUnlocked}
             onPress={handleMainAction}
             textColor="#FFFFFF"
-            style={styles.mainBtn}
+            style={[
+              styles.consoleActionBtn,
+              mode === 'pulang' && isClockOutUnlocked && { backgroundColor: colors.pulang, borderColor: colors.pulang },
+              mode === 'pulang' && !isClockOutUnlocked && { backgroundColor: colors.faint, borderColor: colors.border },
+            ]}
           />
-        </Card>
+        </View>
 
-        {/* 4. Logs Kehadiran Minggu Ini — masuk & pulang + foto bukti */}
-        <Text style={styles.sectionTitle}>Kehadiran Minggu Ini</Text>
-        <Card style={styles.logCard}>
-          {weekLogs.length === 0 ? renderEmptyLogs() : weekLogs.map(renderLogRow)}
-        </Card>
-
-        {/* 5. Kalender Absensi Bulan Ini — abu = alpa, kuning = 1 sesi, biru = lengkap, merah hollow = izin, merah solid = libur */}
-        <Text style={styles.sectionTitle}>Absensi Bulan Ini</Text>
-        <Card style={styles.logCard}>
-          <MonthAttendanceCalendar
-            attendances={userHistory}
-            year={calYear}
-            month={calMonth}
-            onMonthChange={(y, m) => {
-              setCalYear(y);
-              setCalMonth(m);
-              setCalDay(null);
-            }}
-            selectedDay={calDay}
-            onSelectDay={(d) => setCalDay((prev) => (prev === d ? null : d))}
-          />
-          {calDay !== null && (
-            <View style={styles.calDetailBox}>
-              <Text style={styles.calDetailTitle}>
-                {calDay}{' '}
-                {new Date(calYear, calMonth, 1).toLocaleDateString('id-ID', {
-                  month: 'long',
-                  year: 'numeric',
-                })}
-              </Text>
-              {(() => {
-                const key = `${calYear}-${String(calMonth + 1).padStart(2, '0')}-${String(calDay).padStart(2, '0')}`;
-                const dayLogs = userHistory.filter((r) => r.date === key);
-                if (dayLogs.length === 0) {
-                  return <Text style={styles.calDetailEmpty}>Tidak ada absen di tanggal ini.</Text>;
-                }
-                return dayLogs.map(renderLogRow);
-              })()}
-            </View>
-          )}
-        </Card>
+        {/* 3. Riwayat Kehadiran Minggu Ini (Clean Ledger Table) */}
+        <View style={styles.ledgerContainer}>
+          <View style={styles.ledgerHeaderRow}>
+            <Text style={styles.ledgerSectionTitle}>Riwayat Minggu Ini</Text>
+            <Text style={styles.ledgerCount}>{weekLogs.length} Catatan</Text>
+          </View>
+          <View style={[styles.ledgerCard, neoShadow.sm]}>
+            {weekLogs.length === 0 ? renderEmptyLogs() : weekLogs.map(renderLogRow)}
+          </View>
+        </View>
       </ScrollView>
+    </View>
+  );
 
-      {/* Floating Scroll To Top Button */}
-      {showScrollTop && (
-        <TouchableOpacity
-          activeOpacity={0.85}
-          onPress={() => {
-            scrollRef.current?.scrollTo({ y: 0, animated: true });
+  const renderKalenderTab = () => (
+    <ScrollView
+      showsVerticalScrollIndicator={false}
+      contentContainerStyle={styles.scroll}
+    >
+      <View style={styles.tabHeader}>
+        <Text style={styles.greeting}>Kalender Absensi</Text>
+        <Text style={styles.date}>Pantau rekap kehadiran dan status bulanan Anda</Text>
+      </View>
+
+      <Card style={styles.logCard}>
+        <MonthAttendanceCalendar
+          attendances={userHistory}
+          year={calYear}
+          month={calMonth}
+          onMonthChange={(y, m) => {
+            setCalYear(y);
+            setCalMonth(m);
+            setCalDay(null);
           }}
-          style={styles.floatingScrollTopBtn}
-          hitSlop={8}
-        >
-          <Feather name="arrow-up" size={22} color={colors.ink} />
-        </TouchableOpacity>
-      )}
+          selectedDay={calDay}
+          onSelectDay={(d) => setCalDay((prev) => (prev === d ? null : d))}
+        />
+        {calDay !== null && (
+          <View style={styles.calDetailBox}>
+            <Text style={styles.calDetailTitle}>
+              {calDay}{' '}
+              {new Date(calYear, calMonth, 1).toLocaleDateString('id-ID', {
+                month: 'long',
+                year: 'numeric',
+              })}
+            </Text>
+            {(() => {
+              const key = `${calYear}-${String(calMonth + 1).padStart(2, '0')}-${String(calDay).padStart(2, '0')}`;
+              const dayLogs = userHistory.filter((r) => r.date === key);
+              if (dayLogs.length === 0) {
+                return <Text style={styles.calDetailEmpty}>Tidak ada absen di tanggal ini.</Text>;
+              }
+              return dayLogs.map(renderLogRow);
+            })()}
+          </View>
+        )}
+      </Card>
+    </ScrollView>
+  );
 
-      {/* Floating Shutdown / Logout Button di pojok kanan bawah */}
-      <TouchableOpacity
-        activeOpacity={0.85}
-        onPress={confirmLogout}
-        style={styles.floatingLogoutBtn}
-        hitSlop={8}
-      >
-        <Feather name="power" size={24} color="#FFFFFF" />
-      </TouchableOpacity>
+  const renderIzinTab = () => (
+    <View style={{ flex: 1 }}>
+      <LeaveRequestForm
+        onSubmit={handleLeaveFormSubmit}
+        onBack={() => setActiveTab('presensi')}
+        loading={submitting}
+      />
+    </View>
+  );
+
+  const renderProfilTab = () => (
+    <View style={{ flex: 1 }}>
+      <ProfileScreen
+        user={user}
+        onBack={() => setActiveTab('presensi')}
+        onLogout={confirmLogout}
+        onUpdateUser={onUpdateUser}
+      />
+    </View>
+  );
+
+  return (
+    <View style={styles.outer}>
+      {activeTab === 'presensi' && renderPresensiTab()}
+      {activeTab === 'kalender' && renderKalenderTab()}
+      {activeTab === 'izin' && renderIzinTab()}
+      {activeTab === 'profil' && renderProfilTab()}
+
+      {/* Persistent Bottom Navbar */}
+      <BottomNavBar activeTab={activeTab} onTabChange={setActiveTab} />
 
       <CameraModal
         visible={cameraVisible}
@@ -798,15 +947,12 @@ const styles = StyleSheet.create({
     zIndex: 50,
     flexDirection: 'row',
     alignItems: 'center',
-    backgroundColor: colors.pulang,
-    borderRadius: radius.lg,
+    backgroundColor: colors.secondary,
+    borderWidth: 1,
+    borderColor: colors.secondaryBorder,
+    borderRadius: radius.md,
     paddingVertical: 14,
     paddingHorizontal: 16,
-    shadowColor: '#000',
-    shadowOffset: { width: 0, height: 2 },
-    shadowOpacity: 0.2,
-    shadowRadius: 6,
-    elevation: 6,
   },
   toastText: {
     flex: 1,
@@ -832,6 +978,9 @@ const styles = StyleSheet.create({
     fontSize: fontSize.md,
     color: colors.muted,
     marginTop: 2,
+    marginBottom: spacing.md,
+  },
+  tabHeader: {
     marginBottom: spacing.md,
   },
   statusCard: {
@@ -906,47 +1055,46 @@ const styles = StyleSheet.create({
     flexDirection: 'row',
     alignItems: 'center',
     backgroundColor: colors.surface,
-    borderWidth: 1.5,
-    borderColor: colors.border,
-    borderRadius: radius.lg,
+    borderWidth: 1,
+    borderColor: colors.borderStrong,
+    borderRadius: radius.md,
     padding: spacing.md,
     marginTop: spacing.sm,
-    shadowColor: colors.ink,
-    shadowOffset: { width: 0, height: 2 },
-    shadowOpacity: 0.05,
-    shadowRadius: 8,
-    elevation: 2,
   },
   izinIconWrap: {
-    width: 44,
-    height: 44,
-    borderRadius: 22,
+    width: 36,
+    height: 36,
+    borderRadius: radius.sm,
     backgroundColor: colors.izinSoft,
     alignItems: 'center',
     justifyContent: 'center',
     marginRight: spacing.sm,
+    borderWidth: 1,
+    borderColor: colors.izinBorder,
   },
   izinTextWrap: {
     flex: 1,
   },
   izinTitle: {
-    fontSize: fontSize.md,
+    fontSize: fontSize.sm,
     fontWeight: '700',
     color: colors.ink,
   },
   izinSub: {
-    fontSize: fontSize.xs,
-    fontWeight: '600',
+    fontSize: 11,
+    fontWeight: '500',
     color: colors.muted,
     marginTop: 2,
   },
   izinArrow: {
-    width: 32,
-    height: 32,
-    borderRadius: 16,
+    width: 28,
+    height: 28,
+    borderRadius: radius.sm,
     backgroundColor: colors.surfaceSoft,
     alignItems: 'center',
     justifyContent: 'center',
+    borderWidth: 1,
+    borderColor: colors.border,
   },
   // --- Lokasi kantor/rumah ---
   placeBtn: {
@@ -1106,26 +1254,26 @@ const styles = StyleSheet.create({
     flexDirection: 'row',
     alignItems: 'center',
     paddingVertical: 12,
-    borderBottomWidth: 1,
-    borderBottomColor: colors.border,
+    borderBottomWidth: 1.5,
+    borderBottomColor: colors.surfaceMuted,
   },
   logThumb: {
-    width: 56,
-    height: 56,
-    borderRadius: 28,
+    width: 48,
+    height: 48,
+    borderRadius: radius.md,
     marginRight: 12,
-    borderWidth: 2,
-    borderColor: '#FFFFFF',
+    borderWidth: 1,
+    borderColor: colors.border,
     backgroundColor: colors.surfaceSoft,
   },
   logFallback: {
-    width: 56,
-    height: 56,
-    borderRadius: 28,
+    width: 48,
+    height: 48,
+    borderRadius: radius.md,
     marginRight: 12,
     backgroundColor: colors.surfaceSoft,
-    borderWidth: 2,
-    borderColor: '#FFFFFF',
+    borderWidth: 1,
+    borderColor: colors.border,
     alignItems: 'center',
     justifyContent: 'center',
   },
@@ -1154,40 +1302,28 @@ const styles = StyleSheet.create({
     marginTop: 10,
     fontWeight: '600',
   },
-  floatingLogoutBtn: {
-    position: 'absolute',
-    bottom: 22,
-    right: 20,
-    width: 58,
-    height: 58,
-    borderRadius: 29,
-    backgroundColor: '#DC2626',
-    alignItems: 'center',
-    justifyContent: 'center',
-    shadowColor: '#DC2626',
-    shadowOffset: { width: 0, height: 4 },
-    shadowOpacity: 0.35,
-    shadowRadius: 8,
-    elevation: 8,
-    zIndex: 40,
-  },
   floatingScrollTopBtn: {
     position: 'absolute',
-    bottom: 90,
-    right: 24,
-    width: 50,
-    height: 50,
-    borderRadius: 25,
-    backgroundColor: '#FFFFFF',
-    borderWidth: 1.5,
-    borderColor: colors.border,
+    bottom: 76,
+    right: 20,
+    width: 44,
+    height: 44,
+    borderRadius: 22,
+    backgroundColor: colors.surface,
+    borderWidth: 1,
+    borderColor: colors.borderStrong,
     alignItems: 'center',
     justifyContent: 'center',
-    shadowColor: '#000',
-    shadowOffset: { width: 0, height: 3 },
-    shadowOpacity: 0.15,
-    shadowRadius: 6,
-    elevation: 6,
+    ...Platform.select({
+      ios: {
+        shadowColor: colors.ink,
+        shadowOffset: { width: 0, height: 2 },
+        shadowOpacity: 0.08,
+        shadowRadius: 4,
+      },
+      android: { elevation: 4 },
+      web: { boxShadow: '0 2px 8px rgba(15, 23, 42, 0.08)' },
+    }),
     zIndex: 40,
   },
   // --- Modal detail log ---
@@ -1254,5 +1390,322 @@ const styles = StyleSheet.create({
     fontWeight: '600',
     textAlign: 'center',
     paddingVertical: 12,
+  },
+  // Modern Clean Dashboard Header
+  masthead: {
+    backgroundColor: colors.surface,
+    borderRadius: radius.xl,
+    padding: 18,
+    borderWidth: 1,
+    borderColor: colors.border,
+    marginBottom: spacing.md,
+  },
+  mastheadTopRow: {
+    flexDirection: 'row',
+    alignItems: 'flex-start',
+    justifyContent: 'space-between',
+  },
+  employeeInfo: {
+    flex: 1,
+    marginRight: 12,
+  },
+  greetingText: {
+    fontSize: 12,
+    color: colors.muted,
+    fontWeight: '500',
+  },
+  employeeName: {
+    fontSize: 19,
+    fontWeight: '700',
+    color: colors.ink,
+    letterSpacing: -0.3,
+    marginTop: 1,
+  },
+  employeeMeta: {
+    fontSize: 12,
+    color: colors.muted,
+    marginTop: 3,
+    fontWeight: '500',
+  },
+  clockTelemetry: {
+    alignItems: 'flex-end',
+  },
+  clockDigits: {
+    fontSize: 24,
+    fontWeight: '700',
+    color: colors.ink,
+    fontVariant: ['tabular-nums'],
+    letterSpacing: -0.5,
+  },
+  clockDateText: {
+    fontSize: 11,
+    color: colors.muted,
+    marginTop: 2,
+    fontWeight: '500',
+  },
+  mastheadDivider: {
+    height: 1,
+    backgroundColor: colors.borderMuted,
+    marginVertical: 14,
+  },
+  mastheadBottomRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'space-between',
+  },
+  shiftCol: {
+    flex: 1,
+  },
+  bottomRowLabel: {
+    fontSize: 11,
+    color: colors.muted,
+    fontWeight: '500',
+    marginBottom: 2,
+  },
+  shiftValueRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 6,
+  },
+  shiftTimeText: {
+    fontSize: 13,
+    fontWeight: '600',
+    color: colors.ink,
+  },
+  onTimeStatusText: {
+    fontSize: 12,
+    fontWeight: '600',
+    color: colors.success,
+  },
+  lateStatusText: {
+    fontSize: 12,
+    fontWeight: '600',
+    color: colors.danger,
+  },
+  recapLink: {
+    flexDirection: 'row',
+    alignItems: 'center',
+  },
+  recapValueText: {
+    fontSize: 13,
+    fontWeight: '600',
+    color: colors.primary,
+  },
+
+  // Banner status jika sudah absen
+  todaySuccessBanner: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    backgroundColor: colors.successSoft,
+    borderWidth: 1,
+    borderColor: colors.border,
+    borderRadius: radius.md,
+    padding: spacing.md,
+    marginBottom: spacing.md,
+  },
+  todaySuccessTitle: {
+    fontSize: 13,
+    fontWeight: '700',
+    color: colors.successInk,
+  },
+  todaySuccessSub: {
+    fontSize: 11,
+    color: colors.muted,
+    marginTop: 2,
+    fontWeight: '500',
+  },
+
+  // Hallmark Unified Attendance Console
+  consoleCard: {
+    backgroundColor: colors.surface,
+    borderRadius: radius.lg,
+    borderWidth: 1,
+    borderColor: colors.border,
+    padding: spacing.md,
+    marginBottom: spacing.lg,
+  },
+  segmentedConsole: {
+    flexDirection: 'row',
+    backgroundColor: colors.surfaceSoft,
+    borderRadius: radius.md,
+    padding: 3,
+    marginBottom: 12,
+  },
+  segmentBtn: {
+    flex: 1,
+    paddingVertical: 8,
+    alignItems: 'center',
+    justifyContent: 'center',
+    borderRadius: radius.sm,
+  },
+  segmentBtnActive: {
+    backgroundColor: colors.surface,
+    borderWidth: 1,
+    borderColor: colors.border,
+  },
+  segmentBtnLocked: {
+    opacity: 0.6,
+  },
+  segmentText: {
+    fontSize: 12,
+    fontWeight: '600',
+    color: colors.muted,
+  },
+  segmentTextActive: {
+    color: colors.ink,
+    fontWeight: '700',
+  },
+  segmentSub: {
+    fontSize: 10,
+    color: colors.faint,
+    marginTop: 1,
+  },
+  locationToggleRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'space-between',
+    paddingVertical: 4,
+    marginBottom: 10,
+  },
+  locationSectionLabel: {
+    fontSize: 12,
+    fontWeight: '700',
+    color: colors.ink,
+  },
+  locationPillSwitch: {
+    flexDirection: 'row',
+    backgroundColor: colors.surfaceSoft,
+    borderRadius: radius.sm,
+    padding: 2,
+    borderWidth: 1,
+    borderColor: colors.border,
+  },
+  locationPillBtn: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    paddingHorizontal: 10,
+    paddingVertical: 4,
+    borderRadius: radius.sm,
+  },
+  locationPillActive: {
+    backgroundColor: colors.primary,
+  },
+  locationPillText: {
+    fontSize: 11,
+    fontWeight: '600',
+    color: colors.muted,
+  },
+  locationPillTextActive: {
+    color: '#FFFFFF',
+    fontWeight: '700',
+  },
+  reasonContainer: {
+    marginBottom: 10,
+    padding: 10,
+    backgroundColor: colors.surfaceSoft,
+    borderRadius: radius.md,
+    borderWidth: 1,
+    borderColor: colors.border,
+  },
+  reasonLabel: {
+    fontSize: 12,
+    fontWeight: '700',
+    color: colors.ink,
+    marginBottom: 6,
+  },
+  reasonInput: {
+    backgroundColor: colors.surface,
+    borderWidth: 1,
+    borderColor: colors.border,
+    borderRadius: radius.sm,
+    paddingHorizontal: 12,
+    paddingVertical: 8,
+    fontSize: 13,
+    color: colors.ink,
+    minHeight: 44,
+  },
+  reasonInputError: {
+    borderColor: colors.danger,
+  },
+  mapContainer: {
+    borderRadius: radius.md,
+    overflow: 'hidden',
+    borderWidth: 1,
+    borderColor: colors.border,
+    marginBottom: 8,
+  },
+  radarTelemetryBar: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'space-between',
+    backgroundColor: colors.surfaceSoft,
+    borderRadius: radius.md,
+    paddingHorizontal: 10,
+    paddingVertical: 8,
+    borderWidth: 1,
+    borderColor: colors.border,
+  },
+  radarIndicatorDot: {
+    width: 7,
+    height: 7,
+    borderRadius: 3.5,
+    marginRight: 6,
+  },
+  radarStatusText: {
+    fontSize: 11,
+    fontWeight: '600',
+    color: colors.ink,
+    flex: 1,
+  },
+  radarRefreshBtn: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 4,
+    paddingLeft: 8,
+    paddingVertical: 2,
+    paddingHorizontal: 6,
+    borderRadius: radius.xs,
+  },
+  radarRefreshText: {
+    fontSize: 11,
+    fontWeight: '700',
+    color: colors.primary,
+  },
+  consoleActionBtn: {
+    marginTop: 12,
+    minHeight: 52,
+    borderRadius: radius.md,
+  },
+
+  // Ledger / Riwayat List
+  ledgerContainer: {
+    marginBottom: 32,
+  },
+  ledgerHeaderRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'space-between',
+    marginBottom: 8,
+    paddingHorizontal: 2,
+  },
+  ledgerSectionTitle: {
+    fontSize: 12,
+    fontWeight: '700',
+    color: colors.muted,
+    textTransform: 'uppercase',
+    letterSpacing: 0.6,
+  },
+  ledgerCount: {
+    fontSize: 11,
+    fontWeight: '600',
+    color: colors.faint,
+  },
+  ledgerCard: {
+    backgroundColor: colors.surface,
+    borderRadius: radius.lg,
+    borderWidth: 1,
+    borderColor: colors.border,
+    paddingHorizontal: spacing.md,
+    paddingVertical: 2,
   },
 });

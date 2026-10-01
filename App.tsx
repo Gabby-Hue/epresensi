@@ -1,3 +1,4 @@
+import './src/utils/alertPolyfill';
 import React, { useEffect, useState } from 'react';
 import {
   ActivityIndicator,
@@ -17,7 +18,7 @@ import {
 } from './src/types/attendance';
 import { AttendanceService } from './src/services/attendanceService';
 import { initFeedback } from './src/services/feedbackService';
-import { supabase } from './src/lib/supabase';
+import { getToken } from './src/lib/api';
 import { Header } from './src/components/ui/Header';
 import { colors } from './src/theme';
 import { LoginScreen } from './src/components/auth/LoginScreen';
@@ -41,21 +42,10 @@ function AppContent() {
   const hideHeaderForWideAdmin =
     !!currentUser && currentUser.role === 'admin' && Platform.OS === 'web' && width >= 768;
 
-  // Initialize Supabase Auth Session Listener
+  // Restore sesi login tersimpan (token JWT) saat aplikasi dibuka
   useEffect(() => {
     checkCurrentSession();
     void initFeedback();
-
-    const { data: authListener } = supabase.auth.onAuthStateChange(async (event, session) => {
-      if (session?.user) {
-        const profile = await AttendanceService.getCurrentProfile(session.user.id);
-        setCurrentUser(profile);
-      }
-    });
-
-    return () => {
-      authListener.subscription.unsubscribe();
-    };
   }, []);
 
   // Reload data whenever currentUser changes
@@ -67,11 +57,13 @@ function AppContent() {
 
   const checkCurrentSession = async () => {
     setLoading(true);
-    const { data } = await supabase.auth.getSession();
-    if (data.session?.user) {
-      const profile = await AttendanceService.getCurrentProfile(data.session.user.id);
-      setCurrentUser(profile);
-    }
+    try {
+      const token = await getToken();
+      if (token) {
+        const profile = await AttendanceService.getCurrentProfile();
+        setCurrentUser(profile);
+      }
+    } catch {}
     setLoading(false);
   };
 
@@ -111,6 +103,18 @@ function AppContent() {
     setOfficeList(offices);
     if (offices.length > 0) setOfficeSettings({ ...offices[0] });
   };
+
+  useEffect(() => {
+    if (!currentUser || currentUser.role !== 'admin') return;
+    const refreshAdminData = async () => {
+      const offices = await AttendanceService.getOfficeList();
+      setOfficeList(offices);
+      if (offices.length > 0) setOfficeSettings({ ...offices[0] });
+      setAllUsers(await AttendanceService.getAllUsers());
+    };
+    const timer = setInterval(refreshAdminData, 10000);
+    return () => clearInterval(timer);
+  }, [currentUser?.id, currentUser?.role]);
 
   const handleLogout = async () => {
     setLoading(true);
@@ -169,6 +173,7 @@ function AppContent() {
       <ProfileScreen
         user={currentUser}
         onBack={() => setShowProfilePage(false)}
+        onUpdateUser={(updated) => setCurrentUser(updated)}
       />
     );
   }
@@ -199,7 +204,7 @@ function AppContent() {
                 latitude: -6.2088,
                 longitude: 106.8456,
                 radiusMeters: 150,
-                color: '#2196F3',
+                color: colors.primary,
                 updatedAt: new Date().toISOString(),
               }}
               officeList={officeList}
@@ -218,7 +223,7 @@ function AppContent() {
                 latitude: -6.2088,
                 longitude: 106.8456,
                 radiusMeters: 150,
-                color: '#2196F3',
+                color: colors.primary,
                 updatedAt: new Date().toISOString(),
               }}
               officeList={officeList}
@@ -226,6 +231,7 @@ function AppContent() {
               userHistory={userHistory}
               onClockIn={handleUserClockIn}
               onLogout={handleLogout}
+              onUpdateUser={(updated) => setCurrentUser(updated)}
             />
           )}
       </View>

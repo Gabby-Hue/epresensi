@@ -1,5 +1,9 @@
+// E-Presensi UI · Modern Shadcn Login Screen
+// Clean surfaces, subtle hairline borders, refined typography.
+
 import React, { useState } from 'react';
 import {
+  Image,
   KeyboardAvoidingView,
   Platform,
   ScrollView,
@@ -14,7 +18,7 @@ import { Feather } from '@expo/vector-icons';
 import { AttendanceService } from '../../services/attendanceService';
 import { UserProfile } from '../../types/attendance';
 import { Button } from '../ui/Button';
-import { colors, fontSize, radius, spacing } from '../../theme';
+import { colors, fontSize, neoShadow, radius, spacing, touch } from '../../theme';
 
 interface LoginScreenProps {
   onLoginSuccess: (user?: UserProfile) => void;
@@ -59,20 +63,22 @@ export const LoginScreen: React.FC<LoginScreenProps> = ({ onLoginSuccess }) => {
           showsVerticalScrollIndicator={false}
         >
           <View style={styles.brand}>
-            <View style={styles.logo}>
-              <Feather name="check-square" size={28} color="#FFFFFF" />
-            </View>
+            <Image
+              source={require('../../../assets/skmi-logo3.png')}
+              style={styles.logo}
+              resizeMode="contain"
+            />
             <Text style={styles.title}>E-Presensi</Text>
-            <Text style={styles.subtitle}>Absensi karyawan yang mudah dipakai</Text>
+            <Text style={styles.subtitle}>Portal Presensi Karyawan</Text>
           </View>
 
-          <View style={styles.card}>
-            <Text style={styles.cardTitle}>Masuk</Text>
-            <Text style={styles.cardHint}>Gunakan email dan kata sandi dari kantor.</Text>
+          <View style={[styles.card, neoShadow.sm]}>
+            <Text style={styles.cardTitle}>Masuk Akun</Text>
+            <Text style={styles.cardHint}>Gunakan email dan kata sandi resmi dari kantor.</Text>
 
             {errorMessage && (
               <View style={styles.errorBox}>
-                <Feather name="alert-circle" size={18} color={colors.danger} />
+                <Feather name="alert-circle" size={16} color={colors.danger} />
                 <Text style={styles.errorText}>{errorMessage}</Text>
               </View>
             )}
@@ -80,7 +86,7 @@ export const LoginScreen: React.FC<LoginScreenProps> = ({ onLoginSuccess }) => {
             <View style={styles.field}>
               <Text style={styles.label}>Email</Text>
               <View style={styles.inputRow}>
-                <Feather name="mail" size={18} color={colors.faint} style={styles.inputIcon} />
+                <Feather name="mail" size={16} color={colors.faint} style={styles.inputIcon} />
                 <TextInput
                   style={styles.input}
                   placeholder="nama@kantor.com"
@@ -98,7 +104,7 @@ export const LoginScreen: React.FC<LoginScreenProps> = ({ onLoginSuccess }) => {
             <View style={styles.field}>
               <Text style={styles.label}>Kata sandi</Text>
               <View style={styles.inputRow}>
-                <Feather name="lock" size={18} color={colors.faint} style={styles.inputIcon} />
+                <Feather name="lock" size={16} color={colors.faint} style={styles.inputIcon} />
                 <TextInput
                   style={styles.input}
                   placeholder="Kata sandi"
@@ -115,7 +121,7 @@ export const LoginScreen: React.FC<LoginScreenProps> = ({ onLoginSuccess }) => {
                   style={styles.eyeBtn}
                   hitSlop={12}
                 >
-                  <Feather name={showPassword ? 'eye-off' : 'eye'} size={18} color={colors.muted} />
+                  <Feather name={showPassword ? 'eye-off' : 'eye'} size={16} color={colors.muted} />
                 </TouchableOpacity>
               </View>
             </View>
@@ -129,7 +135,7 @@ export const LoginScreen: React.FC<LoginScreenProps> = ({ onLoginSuccess }) => {
             />
 
             <Text style={styles.help}>
-              Lupa kata sandi atau belum punya akun?{'\n'}Hubungi bagian admin kantor.
+              Lupa kata sandi atau belum punya akun?{'\n'}Hubungi tim admin kantor.
             </Text>
           </View>
         </ScrollView>
@@ -150,7 +156,7 @@ const styles = StyleSheet.create({
     flexGrow: 1,
     justifyContent: 'center',
     width: '100%',
-    maxWidth: 440,
+    maxWidth: 420,
     alignSelf: 'center',
     paddingHorizontal: spacing.lg,
     paddingVertical: spacing.xl,
@@ -162,98 +168,91 @@ const styles = StyleSheet.create({
   logo: {
     width: 64,
     height: 64,
-    borderRadius: 18,
-    backgroundColor: colors.primary,
-    alignItems: 'center',
-    justifyContent: 'center',
-    marginBottom: spacing.sm,
-    shadowColor: colors.primary,
-    shadowOffset: { width: 0, height: 4 },
-    shadowOpacity: 0.25,
-    shadowRadius: 10,
-    elevation: 4,
+    marginBottom: spacing.xs,
   },
   title: {
-    fontSize: fontSize.xl,
+    fontSize: 22,
     fontWeight: '700',
     color: colors.ink,
     textAlign: 'center',
+    letterSpacing: -0.3,
   },
   subtitle: {
-    fontSize: fontSize.sm,
+    fontSize: fontSize.xs,
     color: colors.muted,
-    marginTop: 4,
+    marginTop: 2,
     textAlign: 'center',
+    fontWeight: '500',
   },
   card: {
     backgroundColor: colors.surface,
-    borderRadius: radius.lg,
+    borderRadius: radius.xl,
     padding: spacing.lg,
     borderWidth: 1,
     borderColor: colors.border,
-    shadowColor: colors.primary,
-    shadowOffset: { width: 0, height: 2 },
-    shadowOpacity: 0.08,
-    shadowRadius: 16,
-    elevation: 3,
   },
   cardTitle: {
-    fontSize: fontSize.lg,
+    fontSize: fontSize.md,
     fontWeight: '700',
     color: colors.ink,
     textAlign: 'center',
+    letterSpacing: -0.2,
   },
   cardHint: {
-    fontSize: fontSize.sm,
+    fontSize: fontSize.xs,
     color: colors.muted,
-    marginTop: 4,
+    marginTop: 3,
     marginBottom: spacing.md,
-    lineHeight: 22,
+    lineHeight: 18,
     textAlign: 'center',
+    fontWeight: '500',
   },
   errorBox: {
     flexDirection: 'row',
     alignItems: 'center',
     backgroundColor: colors.dangerSoft,
-    borderRadius: radius.md,
-    paddingVertical: spacing.sm,
-    paddingHorizontal: spacing.md,
+    borderWidth: 1,
+    borderColor: colors.izinBorder,
+    borderRadius: radius.sm,
+    paddingVertical: spacing.xs,
+    paddingHorizontal: spacing.sm,
     marginBottom: spacing.md,
+    gap: 8,
   },
   errorText: {
     flex: 1,
-    fontSize: fontSize.sm,
-    color: colors.danger,
+    fontSize: fontSize.xs,
+    color: colors.dangerInk,
     fontWeight: '600',
-    lineHeight: 22,
+    lineHeight: 18,
   },
   field: {
     marginBottom: spacing.md,
   },
   label: {
     fontSize: fontSize.sm,
-    fontWeight: '700',
+    fontWeight: '600',
     color: colors.ink,
-    marginBottom: 8,
+    marginBottom: 6,
   },
   inputRow: {
     flexDirection: 'row',
     alignItems: 'center',
-    backgroundColor: '#F8FBFE',
-    borderWidth: 1.5,
-    borderColor: colors.border,
+    backgroundColor: colors.surface,
+    borderWidth: 1,
+    borderColor: colors.borderStrong,
     borderRadius: radius.md,
-    paddingHorizontal: spacing.md,
-    minHeight: 54,
+    paddingHorizontal: spacing.sm,
+    minHeight: touch.inputMinHeight,
   },
   inputIcon: {
-    marginRight: spacing.sm,
+    marginRight: spacing.xs,
   },
   input: {
     flex: 1,
     fontSize: fontSize.sm,
     color: colors.ink,
-    paddingVertical: 14,
+    paddingVertical: 10,
     paddingLeft: spacing.xs,
     paddingRight: spacing.xs,
     textAlignVertical: 'center',
@@ -271,5 +270,6 @@ const styles = StyleSheet.create({
     textAlign: 'center',
     marginTop: spacing.md,
     lineHeight: 20,
+    fontWeight: '500',
   },
 });

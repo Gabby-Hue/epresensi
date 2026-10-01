@@ -1,7 +1,10 @@
+// E-Presensi UI · Modern Shadcn Card
+// Crisp hairline border, soft ambient shadow, structured header.
+
 import React from 'react';
 import { StyleSheet, Text, View, ViewStyle } from 'react-native';
 import { Feather } from '@expo/vector-icons';
-import { colors, fontSize, radius, spacing } from '../../theme';
+import { colors, fontSize, neoShadow, radius, spacing } from '../../theme';
 
 interface CardProps {
   children: React.ReactNode;
@@ -14,13 +17,17 @@ interface CardProps {
 
 export const Card: React.FC<CardProps> = ({ children, title, subtitle, action, icon, style }) => {
   return (
-    <View style={[styles.card, style]}>
+    <View style={[styles.card, neoShadow.sm, style]}>
       {(title || action) && (
         <View style={styles.header}>
           <View style={styles.titleWrap}>
             {title && (
               <View style={styles.titleRow}>
-                {icon && <Feather name={icon} size={20} color={colors.ink} style={styles.titleIcon} />}
+                {icon && (
+                  <View style={styles.iconBox}>
+                    <Feather name={icon} size={15} color={colors.primary} />
+                  </View>
+                )}
                 <Text style={styles.title}>{title}</Text>
               </View>
             )}
@@ -38,16 +45,19 @@ const styles = StyleSheet.create({
   card: {
     backgroundColor: colors.surface,
     borderRadius: radius.lg,
-    padding: spacing.lg,
+    padding: spacing.md,
     marginBottom: spacing.md,
     borderWidth: 1,
     borderColor: colors.border,
   },
   header: {
     flexDirection: 'row',
-    alignItems: 'flex-start',
+    alignItems: 'center',
     justifyContent: 'space-between',
-    marginBottom: spacing.md,
+    marginBottom: spacing.sm,
+    paddingBottom: spacing.sm,
+    borderBottomWidth: 1,
+    borderBottomColor: colors.borderMuted,
   },
   titleWrap: {
     flex: 1,
@@ -57,18 +67,26 @@ const styles = StyleSheet.create({
     flexDirection: 'row',
     alignItems: 'center',
   },
-  titleIcon: {
+  iconBox: {
+    width: 26,
+    height: 26,
+    borderRadius: radius.sm,
+    backgroundColor: colors.primarySoft,
+    alignItems: 'center',
+    justifyContent: 'center',
     marginRight: 8,
   },
   title: {
-    fontSize: fontSize.lg,
+    fontSize: fontSize.md,
     fontWeight: '700',
     color: colors.ink,
+    letterSpacing: -0.2,
   },
   subtitle: {
-    fontSize: fontSize.sm,
+    fontSize: fontSize.xs,
     color: colors.muted,
-    marginTop: 4,
-    lineHeight: 21,
+    marginTop: 2,
+    lineHeight: 18,
+    fontWeight: '500',
   },
 });

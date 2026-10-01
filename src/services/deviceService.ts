@@ -50,9 +50,11 @@ export async function getDeviceInfo(): Promise<DeviceDetails> {
   }
 
   const modelFormatted =
-    brand.toLowerCase() === 'apple'
-      ? `${model}`
-      : `${brand.toLowerCase()} ${model.toLowerCase()}`;
+    Platform.OS === 'web'
+      ? 'Web Browser'
+      : brand.toLowerCase() === 'apple'
+        ? `${model}`
+        : `${brand} ${model}`;
 
   return {
     modelName: modelFormatted,

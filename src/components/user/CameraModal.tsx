@@ -1,3 +1,6 @@
+// Hallmark Component · CameraModal (Viewfinder Verification)
+// Anti-AI-slop: Authentic photographic viewfinder, zero cybernetic grids, locked tokens.
+
 import React, { createElement, useEffect, useRef, useState } from 'react';
 import {
   Image,
@@ -12,6 +15,7 @@ import { SafeAreaView } from 'react-native-safe-area-context';
 import { CameraView, useCameraPermissions } from 'expo-camera';
 import { Button } from '../ui/Button';
 import { Feather } from '@expo/vector-icons';
+import { colors, fontSize, radius, spacing } from '../../theme';
 
 interface CameraModalProps {
   visible: boolean;
@@ -63,10 +67,10 @@ export const CameraModal: React.FC<CameraModalProps> = ({
           videoNodeRef.current.play().catch(() => {});
         }
       } else {
-        setWebError('Browser Anda tidak mendukung akses webcam.');
+        setWebError('Peramban Anda tidak mendukung akses kamera.');
       }
     } catch (err: any) {
-      setWebError('Gagal mengakses kamera laptop: ' + (err.message || 'Izin kamera ditolak.'));
+      setWebError('Gagal mengakses kamera: ' + (err.message || 'Izin kamera ditolak.'));
     }
   };
 
@@ -144,11 +148,11 @@ export const CameraModal: React.FC<CameraModalProps> = ({
       <View style={styles.webCameraContainer}>
         {webError ? (
           <View style={styles.webErrorBox}>
-            <Feather name="alert-triangle" size={32} color="#B3261E" />
-            <Text style={styles.webErrorTitle}>Akses Kamera Laptop Ditutup</Text>
+            <Feather name="alert-triangle" size={32} color={colors.danger} />
+            <Text style={styles.webErrorTitle}>Akses Kamera Ditutup</Text>
             <Text style={styles.webErrorText}>{webError}</Text>
             <Button
-              title="Aktifkan Kamera Laptop"
+              title="Aktifkan Kamera"
               variant="primary"
               onPress={initWebCamera}
               style={{ marginTop: 14 }}
@@ -176,7 +180,7 @@ export const CameraModal: React.FC<CameraModalProps> = ({
             })}
             <View style={styles.targetGuideOverlay}>
               <View style={styles.targetCircle} />
-              <Text style={styles.targetGuideText}>Posisikan wajah Anda di dalam lingkaran</Text>
+              <Text style={styles.targetGuideText}>Posisikan wajah Anda di dalam panduan</Text>
             </View>
           </View>
         )}
@@ -191,23 +195,23 @@ export const CameraModal: React.FC<CameraModalProps> = ({
       <SafeAreaView style={styles.container}>
         {/* Minimalist Top Header */}
         <View style={styles.header}>
-          <TouchableOpacity onPress={handleCloseModal} style={styles.closeBtn}>
-            <Feather name="x" size={20} color="#1C1917" />
+          <TouchableOpacity onPress={handleCloseModal} style={styles.closeBtn} accessibilityLabel="Tutup Kamera">
+            <Feather name="x" size={20} color={colors.ink} />
           </TouchableOpacity>
           <View style={{ alignItems: 'center' }}>
-            <Text style={styles.headerTitle}>Swafoto Presensi Live</Text>
+            <Text style={styles.headerTitle}>Verifikasi Swafoto</Text>
             <Text style={styles.headerSub}>{attendanceTypeLabel}</Text>
           </View>
-          <View style={{ width: 36 }} />
+          <View style={{ width: 40 }} />
         </View>
 
         {/* Captured Photo Validation vs Live Camera Stream */}
         {capturedPhoto ? (
           <View style={styles.previewContainer}>
             <View style={styles.validationBanner}>
-              <Feather name="check-circle" size={18} color="#346538" style={{ marginRight: 8 }} />
+              <Feather name="check-circle" size={18} color={colors.successInk} style={{ marginRight: 8 }} />
               <Text style={styles.validationText}>
-                Foto Berhasil Diambil. Periksa kejelasan foto Anda sebelum konfirmasi.
+                Foto berhasil diambil. Periksa kejelasan sebelum konfirmasi.
               </Text>
             </View>
 
@@ -217,14 +221,14 @@ export const CameraModal: React.FC<CameraModalProps> = ({
 
             <View style={styles.actionRow}>
               <Button
-                title="Ulangi Foto"
+                title="Ambil Ulang"
                 variant="outline"
                 icon="refresh-cw"
                 onPress={handleRetake}
                 style={{ flex: 1, marginRight: 6 }}
               />
               <Button
-                title="Konfirmasi & Simpan"
+                title="Konfirmasi"
                 variant="primary"
                 icon="check"
                 onPress={handleConfirm}
@@ -238,10 +242,10 @@ export const CameraModal: React.FC<CameraModalProps> = ({
               renderWebVideo()
             ) : !permission?.granted ? (
               <View style={styles.permissionBox}>
-                <Feather name="camera-off" size={36} color="#8A8580" />
+                <Feather name="camera-off" size={36} color={colors.faint} />
                 <Text style={styles.permText}>Izin Kamera Diperlukan</Text>
                 <Text style={styles.permSubText}>
-                  Aplikasi membutuhkan akses kamera untuk melakukan potret presensi langsung.
+                  Aplikasi membutuhkan akses kamera untuk mengambil foto bukti presensi langsung.
                 </Text>
                 <Button
                   title="Izinkan Akses Kamera"
@@ -254,7 +258,7 @@ export const CameraModal: React.FC<CameraModalProps> = ({
                 <CameraView style={styles.nativeCamera} facing="front" ref={cameraRef}>
                   <View style={styles.targetGuideOverlay}>
                     <View style={styles.targetCircle} />
-                    <Text style={styles.targetGuideText}>Posisikan wajah Anda di dalam lingkaran</Text>
+                    <Text style={styles.targetGuideText}>Posisikan wajah Anda di dalam panduan</Text>
                   </View>
                 </CameraView>
               </View>
@@ -269,6 +273,7 @@ export const CameraModal: React.FC<CameraModalProps> = ({
                 onPress={handleTakePicture}
                 disabled={capturing}
                 style={styles.snapBtn}
+                accessibilityLabel="Ambil Foto"
               >
                 <View style={styles.snapInnerCircle} />
               </TouchableOpacity>
@@ -285,74 +290,71 @@ export const CameraModal: React.FC<CameraModalProps> = ({
 const styles = StyleSheet.create({
   container: {
     flex: 1,
-    backgroundColor: '#F7F6F3',
+    backgroundColor: colors.background,
   },
   header: {
     flexDirection: 'row',
     alignItems: 'center',
     justifyContent: 'space-between',
-    paddingHorizontal: 18,
-    paddingVertical: 14,
-    backgroundColor: '#FFFFFF',
+    paddingHorizontal: spacing.md,
+    paddingVertical: 12,
+    backgroundColor: colors.surface,
     borderBottomWidth: 1,
-    borderBottomColor: '#E3E1DD',
+    borderBottomColor: colors.border,
   },
   closeBtn: {
-    width: 44,
-    height: 44,
-    borderRadius: 10,
-    backgroundColor: '#EFEDE9',
+    width: 40,
+    height: 40,
+    borderRadius: radius.md,
+    backgroundColor: colors.surfaceSoft,
     alignItems: 'center',
     justifyContent: 'center',
     borderWidth: 1,
-    borderColor: '#E3E1DD',
+    borderColor: colors.borderStrong,
   },
   headerTitle: {
-    fontSize: 18,
+    fontSize: fontSize.md,
     fontWeight: '700',
-    color: '#1C1917',
+    color: colors.ink,
+    letterSpacing: -0.2,
   },
   headerSub: {
-    fontSize: 13,
-    color: '#57534E',
-    fontWeight: '600',
+    fontSize: fontSize.xs,
+    color: colors.muted,
+    fontWeight: '500',
+    marginTop: 1,
   },
   previewContainer: {
     flex: 1,
-    padding: 20,
+    padding: spacing.lg,
     justifyContent: 'space-between',
     alignItems: 'center',
-    backgroundColor: '#FFFFFF',
+    backgroundColor: colors.surface,
   },
   validationBanner: {
     flexDirection: 'row',
     alignItems: 'center',
-    backgroundColor: '#EDF3EC',
+    backgroundColor: colors.successSoft,
     borderWidth: 1,
-    borderColor: '#E3E1DD',
-    padding: 14,
-    borderRadius: 10,
+    borderColor: colors.border,
+    padding: spacing.md,
+    borderRadius: radius.md,
     width: '100%',
   },
   validationText: {
-    fontSize: 14,
-    color: '#346538',
-    fontWeight: '700',
+    fontSize: fontSize.sm,
+    color: colors.successInk,
+    fontWeight: '600',
     flex: 1,
   },
   photoFrame: {
-    width: 250,
-    height: 330,
-    borderRadius: 125,
-    borderWidth: 4,
-    borderColor: '#2196F3',
+    width: 240,
+    height: 320,
+    borderRadius: radius.xl,
+    borderWidth: 2,
+    borderColor: colors.primary,
     overflow: 'hidden',
-    backgroundColor: '#FFFFFF',
-    shadowColor: '#2196F3',
-    shadowOffset: { width: 0, height: 4 },
-    shadowOpacity: 0.18,
-    shadowRadius: 12,
-    elevation: 5,
+    backgroundColor: colors.surface,
   },
   previewImage: {
     width: '100%',
@@ -366,34 +368,34 @@ const styles = StyleSheet.create({
   },
   cameraViewArea: {
     flex: 1,
-    backgroundColor: '#FFFFFF',
+    backgroundColor: colors.surface,
   },
   webCameraContainer: {
     flex: 1,
-    backgroundColor: '#FFFFFF',
+    backgroundColor: colors.surface,
   },
   videoWrapper: {
     flex: 1,
     position: 'relative',
     overflow: 'hidden',
-    backgroundColor: '#F8FBFF',
+    backgroundColor: colors.surfaceSoft,
   },
   webErrorBox: {
     flex: 1,
     alignItems: 'center',
     justifyContent: 'center',
-    padding: 24,
-    backgroundColor: '#FFFFFF',
+    padding: spacing.xl,
+    backgroundColor: colors.surface,
   },
   webErrorTitle: {
-    fontSize: 18,
-    fontWeight: '800',
-    color: '#0F172A',
+    fontSize: fontSize.lg,
+    fontWeight: '700',
+    color: colors.ink,
     marginTop: 12,
   },
   webErrorText: {
-    fontSize: 14,
-    color: '#334155',
+    fontSize: fontSize.sm,
+    color: colors.muted,
     textAlign: 'center',
     marginTop: 6,
   },
@@ -410,67 +412,68 @@ const styles = StyleSheet.create({
     justifyContent: 'center',
     backgroundColor: 'transparent',
   },
-  // Oval portrait menyerupai wajah — bukan lingkaran bulat, bukan kotak
   targetCircle: {
-    width: 230,
-    height: 310,
-    borderRadius: 115,
-    borderWidth: 3,
-    borderColor: '#2196F3',
+    width: 220,
+    height: 300,
+    borderRadius: radius.xl,
+    borderWidth: 2,
+    borderColor: colors.primary,
     borderStyle: 'dashed',
     backgroundColor: 'transparent',
   },
   targetGuideText: {
-    color: '#1C1917',
-    fontSize: 15,
-    fontWeight: '700',
+    color: colors.ink,
+    fontSize: fontSize.sm,
+    fontWeight: '600',
     marginTop: 16,
-    backgroundColor: 'rgba(255, 255, 255, 0.92)',
-    paddingHorizontal: 16,
-    paddingVertical: 8,
-    borderRadius: 20,
+    backgroundColor: 'rgba(255, 255, 255, 0.95)',
+    borderWidth: 1,
+    borderColor: colors.border,
+    paddingHorizontal: 14,
+    paddingVertical: 6,
+    borderRadius: radius.sm,
   },
   bottomControls: {
     flexDirection: 'column',
     alignItems: 'center',
     justifyContent: 'center',
     paddingVertical: 18,
-    backgroundColor: '#FFFFFF',
+    backgroundColor: colors.surface,
     borderTopWidth: 1,
-    borderTopColor: '#E3E1DD',
+    borderTopColor: colors.border,
   },
   snapBtn: {
-    width: 76,
-    height: 76,
-    borderRadius: 12,
-    borderWidth: 2,
-    borderColor: '#1C1917',
+    width: 72,
+    height: 72,
+    borderRadius: 36,
+    borderWidth: 3,
+    borderColor: colors.primary,
     alignItems: 'center',
     justifyContent: 'center',
-    backgroundColor: '#FFFFFF',
+    backgroundColor: colors.surface,
   },
   snapInnerCircle: {
-    width: 60,
-    height: 60,
-    borderRadius: 8,
-    backgroundColor: '#1C1917',
+    width: 56,
+    height: 56,
+    borderRadius: 28,
+    backgroundColor: colors.primary,
   },
   permissionBox: {
     flex: 1,
     alignItems: 'center',
     justifyContent: 'center',
-    padding: 30,
-    backgroundColor: '#FFFFFF',
+    padding: spacing.xl,
+    backgroundColor: colors.surface,
   },
   permText: {
-    fontSize: 18,
+    fontSize: fontSize.lg,
     fontWeight: '700',
-    color: '#1C1917',
+    color: colors.ink,
     marginTop: 14,
   },
   permSubText: {
-    fontSize: 14,
-    color: '#57534E',
+    fontSize: fontSize.sm,
+    color: colors.muted,
     textAlign: 'center',
     marginTop: 6,
   },

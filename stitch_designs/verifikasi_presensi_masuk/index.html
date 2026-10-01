@@ -1,0 +1,273 @@
+<!DOCTYPE html>
+
+<html lang="id"><head>
+<meta charset="utf-8"/>
+<meta content="width=device-width, initial-scale=1.0" name="viewport"/>
+<title>Verifikasi Presensi Masuk - E-Presensi Enterprise</title>
+<link href="https://fonts.googleapis.com" rel="preconnect"/>
+<link crossorigin="" href="https://fonts.gstatic.com" rel="preconnect"/>
+<link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&amp;display=swap" rel="stylesheet"/>
+<link href="https://fonts.googleapis.com/css2?family=Material+Symbols+Outlined:wght,FILL@100..700,0..1&amp;display=swap" rel="stylesheet"/>
+<link href="https://fonts.googleapis.com/css2?family=Material+Symbols+Outlined:wght,FILL@100..700,0..1&amp;display=swap" rel="stylesheet"/>
+<script src="https://cdn.tailwindcss.com?plugins=forms,container-queries"></script>
+<script id="tailwind-config">
+    tailwind.config = {
+      darkMode: "class",
+      theme: {
+        extend: {
+          "colors": {
+            "surface-variant": "#d3e4fd",
+            "on-surface-variant": "#404752",
+            "tertiary-container": "#f86219",
+            "on-secondary": "#ffffff",
+            "secondary-container": "#54a0fe",
+            "on-tertiary": "#ffffff",
+            "on-primary-container": "#002c4f",
+            "surface-container-highest": "#d3e4fd",
+            "on-tertiary-fixed-variant": "#7f2b00",
+            "surface-dim": "#cbdbf4",
+            "secondary": "#005faf",
+            "primary": "#0061a4",
+            "surface-container-lowest": "#ffffff",
+            "on-tertiary-fixed": "#370e00",
+            "surface-container-high": "#dbe9ff",
+            "surface-container-low": "#eef4ff",
+            "outline": "#707883",
+            "on-secondary-fixed": "#001c3a",
+            "secondary-fixed-dim": "#a5c8ff",
+            "error": "#ba1a1a",
+            "on-secondary-fixed-variant": "#004786",
+            "surface-container": "#e5eeff",
+            "on-background": "#0b1c2f",
+            "on-surface": "#0b1c2f",
+            "on-secondary-container": "#003567",
+            "surface-tint": "#0061a4",
+            "inverse-surface": "#213144",
+            "surface": "#f8f9ff",
+            "error-container": "#ffdad6",
+            "on-primary-fixed-variant": "#00497d",
+            "on-error-container": "#93000a",
+            "outline-variant": "#bfc7d4",
+            "on-error": "#ffffff",
+            "secondary-fixed": "#d4e3ff",
+            "on-primary-fixed": "#001d36",
+            "background": "#f8f9ff",
+            "surface-bright": "#f8f9ff",
+            "tertiary": "#a73a00",
+            "inverse-primary": "#9ecaff",
+            "inverse-on-surface": "#eaf1ff",
+            "primary-fixed": "#d1e4ff",
+            "on-tertiary-container": "#511800",
+            "tertiary-fixed-dim": "#ffb599",
+            "primary-container": "#2196f3",
+            "primary-fixed-dim": "#9ecaff",
+            "on-primary": "#ffffff",
+            "tertiary-fixed": "#ffdbce"
+          },
+          "borderRadius": {
+            "DEFAULT": "0.25rem",
+            "lg": "0.5rem",
+            "xl": "0.75rem",
+            "full": "9999px"
+          },
+          "spacing": {
+            "space-xl": "2rem",
+            "space-md": "1rem",
+            "gutter": "1rem",
+            "space-sm": "0.5rem",
+            "space-lg": "1.5rem",
+            "margin": "2rem",
+            "gutter-mobile": "0.75rem",
+            "space-xs": "0.25rem",
+            "margin-mobile": "1rem"
+          },
+          "fontFamily": {
+            "headline-lg": ["Inter"],
+            "mono-numeric": ["Inter"],
+            "body-lg": ["Inter"],
+            "headline-xl": ["Inter"],
+            "body-md": ["Inter"],
+            "label-lg": ["Inter"],
+            "headline-sm": ["Inter"],
+            "headline-md": ["Inter"],
+            "body-sm": ["Inter"],
+            "label-md": ["Inter"],
+            "headline-xl-mobile": ["Inter"],
+            "label-sm": ["Inter"]
+          },
+          "fontSize": {
+            "headline-lg": ["24px", { "lineHeight": "32px", "letterSpacing": "-0.015em", "fontWeight": "600" }],
+            "mono-numeric": ["18px", { "lineHeight": "24px", "letterSpacing": "-0.01em", "fontWeight": "600" }],
+            "body-lg": ["16px", { "lineHeight": "24px", "fontWeight": "400" }],
+            "headline-xl": ["32px", { "lineHeight": "40px", "letterSpacing": "-0.02em", "fontWeight": "600" }],
+            "body-md": ["14px", { "lineHeight": "20px", "fontWeight": "400" }],
+            "label-lg": ["14px", { "lineHeight": "20px", "letterSpacing": "0.01em", "fontWeight": "600" }],
+            "headline-sm": ["16px", { "lineHeight": "24px", "letterSpacing": "-0.005em", "fontWeight": "600" }],
+            "headline-md": ["20px", { "lineHeight": "28px", "letterSpacing": "-0.01em", "fontWeight": "600" }],
+            "body-sm": ["12px", { "lineHeight": "16px", "fontWeight": "400" }],
+            "label-md": ["12px", { "lineHeight": "16px", "letterSpacing": "0.02em", "fontWeight": "600" }],
+            "headline-xl-mobile": ["26px", { "lineHeight": "34px", "letterSpacing": "-0.015em", "fontWeight": "600" }],
+            "label-sm": ["11px", { "lineHeight": "14px", "letterSpacing": "0.04em", "fontWeight": "600" }]
+          }
+        },
+      },
+    }
+  </script>
+<style>
+    body {
+      min-height: max(884px, 100dvh);
+    }
+  </style>
+  </head>
+<body class="bg-surface text-on-surface font-body-md antialiased min-h-screen flex justify-center selection:bg-primary selection:text-on-primary">
+<!-- Mobile Device Shell Viewport -->
+<main class="w-full max-w-md bg-surface min-h-screen flex flex-col pb-10 border-x border-outline-variant/30">
+<!-- Top Navigation Bar (Shared Component Anchor) -->
+<header class="bg-surface dark:bg-inverse-surface border-b border-outline-variant dark:border-outline shadow-sm dark:shadow-none flex justify-between items-center w-full px-4 h-14 max-w-md mx-auto sticky top-0 z-40 backdrop-blur-md">
+<button aria-label="Kembali" class="w-10 h-10 rounded-xl border border-outline-variant flex items-center justify-center hover:bg-surface-container active:scale-95 transition-transform duration-150 text-on-surface" type="button">
+<span class="material-symbols-outlined text-[20px]" data-icon="arrow_back">arrow_back</span>
+</button>
+<div class="flex flex-col items-center">
+<h1 class="font-headline-sm text-headline-sm font-semibold text-on-surface dark:text-inverse-on-surface">Verifikasi Presensi</h1>
+</div>
+<div class="inline-flex items-center px-2.5 py-1 rounded-full bg-surface-container-high text-primary border border-outline-variant/40">
+<span class="w-1.5 h-1.5 rounded-full bg-primary-container mr-1.5"></span>
+<span class="font-label-md text-label-md">Shift Pagi</span>
+</div>
+</header>
+<!-- Main Content Container -->
+<div class="px-4 pt-3 space-y-3.5 flex-1 flex flex-col">
+<!-- Section: Real-time Digital Clock & Status Banner -->
+<section class="bg-surface-container-lowest rounded-xl border border-outline-variant p-3.5 shadow-sm">
+<div class="flex items-center justify-between">
+<div class="space-y-0.5">
+<span class="font-label-md text-label-md text-on-surface-variant flex items-center gap-1.5">
+<span class="material-symbols-outlined text-[15px]" data-icon="calendar_today">calendar_today</span>
+              Rabu, 23 September 2026
+            </span>
+<div class="font-mono-numeric text-headline-lg font-bold text-on-surface tracking-tight" id="liveClock">
+              07:14:32 <span class="font-label-md text-label-md text-on-surface-variant font-medium">WIB</span>
+</div>
+</div>
+<div class="flex flex-col items-end gap-1.5">
+<div class="inline-flex items-center gap-1.5 px-2.5 py-1 rounded-full bg-surface-container text-primary border border-outline-variant/40">
+<span class="w-2 h-2 rounded-full bg-emerald-500 animate-pulse"></span>
+<span class="font-label-sm text-label-sm">NTP Stratum-1</span>
+</div>
+<span class="font-label-sm text-label-sm text-on-surface-variant">Terinkripsi &amp; Sah</span>
+</div>
+</div>
+</section>
+<!-- Section: Live Camera Viewfinder & Biometric Oval HUD -->
+<section class="relative w-full aspect-[4/5] rounded-2xl overflow-hidden border border-outline-variant shadow-sm bg-inverse-surface group flex items-center justify-center">
+<!-- Live Camera Stream Image Placeholder -->
+<img class="absolute inset-0 w-full h-full object-cover object-center select-none" data-alt="An Indonesian male office employee standing in a modern corporate office interior captured during a live biometric selfie attendance scan. He is wearing a formal white collared shirt with an institutional ID lanyard badge. The lighting is balanced and crisp with Scandinavian clean architectural design and cool blue daylight tones. An accurate digital face recognition mesh and corner biometric target brackets are overlaid on his portrait." src="https://lh3.googleusercontent.com/aida-public/AB6AXuDK9BZ12Q6yhEssNdZtOYj3ofVlk7bvhhhk-QamfoxR3y1PGjClYXZsyIBK7sH-7IfeShEdqsIzPvPlwzSuvDHN7iBXLZ96EcQyjx4h65ZeLgp38Uv3oj4v9jH0CypYe-0YYuYFBuMwKvHESp_oohzJ7hKTt2OSvA6hLnyBD6gnqg9yV_QwnjNdjJPUageOLz6Hl6epuxiU9N_p_YNPhGOOTaJiECwsu_T_QoMdoiAIveksj9Xf3l8RpPqdeQK6hctXz5L4C18lDm8V"/>
+<!-- Top Viewfinder Instruction Pill -->
+<div class="absolute top-3.5 inset-x-3 z-20 flex justify-center">
+<div class="bg-[#0C1B2A]/85 backdrop-blur-md px-3.5 py-1.5 rounded-full border border-white/20 text-center max-w-xs shadow-md">
+<p class="text-white font-label-md text-label-md font-medium tracking-normal">
+              Posisikan wajah Anda di dalam bingkai oval dengan pencahayaan memadai
+            </p>
+</div>
+</div>
+<!-- Biometric Target Oval Overlay and Crosshairs -->
+<div class="relative z-10 w-56 h-72 rounded-[48%] border-2 border-dashed border-white/80 flex items-center justify-center pointer-events-none">
+<!-- Optical Corner Targeting Brackets -->
+<div class="absolute -top-3 -left-3 w-6 h-6 border-t-2 border-l-2 border-emerald-400"></div>
+<div class="absolute -top-3 -right-3 w-6 h-6 border-t-2 border-r-2 border-emerald-400"></div>
+<div class="absolute -bottom-3 -left-3 w-6 h-6 border-b-2 border-l-2 border-emerald-400"></div>
+<div class="absolute -bottom-3 -right-3 w-6 h-6 border-b-2 border-r-2 border-emerald-400"></div>
+<!-- Central Scanner Reticle Line -->
+<div class="w-full h-0.5 bg-gradient-to-r from-transparent via-emerald-400/70 to-transparent absolute top-1/2 -translate-y-1/2 animate-pulse"></div>
+</div>
+<!-- Bottom Biometric Live Telemetry Badge -->
+<div class="absolute bottom-3 inset-x-3 z-20 flex justify-between items-end">
+<div class="bg-[#0C1B2A]/85 backdrop-blur-md rounded-xl p-2.5 border border-white/15 text-white space-y-1 shadow-lg">
+<div class="flex items-center gap-1.5">
+<span class="w-2 h-2 rounded-full bg-emerald-400 animate-ping"></span>
+<span class="w-2 h-2 rounded-full bg-emerald-500 absolute"></span>
+<span class="font-label-md text-label-md font-semibold text-white ml-2">Wajah Terdeteksi &amp; Jelas</span>
+</div>
+<div class="font-label-sm text-label-sm text-surface-variant flex items-center gap-1">
+<span class="material-symbols-outlined text-[13px] text-emerald-400" data-icon="verified_user">verified_user</span>
+              Liveness Verified (99.4%)
+            </div>
+</div>
+<div class="w-9 h-9 rounded-xl bg-[#0C1B2A]/80 backdrop-blur-md border border-white/20 flex items-center justify-center text-white">
+<span class="material-symbols-outlined text-[20px]" data-icon="center_focus_strong">center_focus_strong</span>
+</div>
+</div>
+</section>
+<!-- Section: Geolocation & Office Geofence HUD Card -->
+<section class="bg-surface-container-lowest rounded-xl border border-outline-variant p-3.5 space-y-2.5 shadow-sm">
+<div class="flex items-start justify-between gap-2">
+<div class="flex items-start gap-2.5">
+<div class="w-8 h-8 rounded-lg bg-surface-container flex items-center justify-center text-primary mt-0.5 border border-outline-variant/40 shrink-0">
+<span class="material-symbols-outlined text-[18px]" data-icon="location_on">location_on</span>
+</div>
+<div>
+<h2 class="font-headline-sm text-headline-sm font-semibold text-on-surface">SMKN 2 Surabaya</h2>
+<p class="font-body-sm text-body-sm text-on-surface-variant">Gedung Utama • Presensi Guru &amp; Staf</p>
+</div>
+</div>
+<div class="inline-flex items-center px-2.5 py-1 rounded-full bg-surface-container text-primary font-label-sm text-label-sm border border-outline-variant/40 shrink-0">
+<span class="w-1.5 h-1.5 rounded-full bg-primary-container mr-1.5"></span>
+            Radius: 18m
+          </div>
+</div>
+<div class="bg-surface rounded-lg p-2.5 border border-outline-variant/50 flex items-center justify-between text-on-surface-variant font-label-md text-label-md">
+<div class="font-mono-numeric text-body-sm">
+<span class="text-on-surface font-semibold">Lat:</span> -7.29124 • <span class="text-on-surface font-semibold">Long:</span> 112.74231
+          </div>
+<div class="flex items-center gap-1 text-primary">
+<span class="material-symbols-outlined text-[15px]" data-icon="satellite_alt">satellite_alt</span>
+<span class="font-label-sm text-label-sm font-semibold">±3m (Valid)</span>
+</div>
+</div>
+</section>
+<!-- Section: Primary Tactile Action Zone -->
+<section class="pt-1 space-y-2.5">
+<!-- Primary 56px Clock-In Actuation Button -->
+<button class="w-full h-14 bg-primary-container hover:bg-[#1976D2] active:scale-[0.99] text-white rounded-xl font-label-lg text-label-lg font-semibold flex items-center justify-center gap-2.5 shadow-md transition-all duration-150" id="btnShutter" type="button">
+<span class="material-symbols-outlined text-[22px]" data-icon="photo_camera">photo_camera</span>
+          Ambil Foto &amp; Konfirmasi Masuk
+        </button>
+<!-- Secondary 48px Switch Camera Button -->
+<button class="w-full h-12 bg-surface-container-lowest hover:bg-surface-container-low active:scale-[0.99] text-on-surface border border-outline-variant rounded-xl font-label-md text-label-md font-semibold flex items-center justify-center gap-2 transition-all duration-150" type="button">
+<span class="material-symbols-outlined text-[18px] text-on-surface-variant" data-icon="cameraswitch">cameraswitch</span>
+          Beralih Kamera Depan / Belakang
+        </button>
+<!-- Security & Legal Verification Footnote -->
+<div class="flex items-center justify-center gap-1.5 pt-1 text-on-surface-variant">
+<span class="material-symbols-outlined text-[14px]" data-icon="lock">lock</span>
+<span class="font-label-sm text-label-sm">Dilengkapi feedback getar dan enkripsi koordinat aman</span>
+</div>
+</section>
+</div>
+</main>
+<script>
+    // Realtime Tabular Clock Micro-script
+    function updateClock() {
+      const now = new Date();
+      const hours = String(now.getHours()).padStart(2, '0');
+      const minutes = String(now.getMinutes()).padStart(2, '0');
+      const seconds = String(now.getSeconds()).padStart(2, '0');
+      const clockElement = document.getElementById('liveClock');
+      if (clockElement) {
+        clockElement.innerHTML = `${hours}:${minutes}:${seconds} <span class="font-label-md text-label-md text-on-surface-variant font-medium">WIB</span>`;
+      }
+    }
+    setInterval(updateClock, 1000);
+    updateClock();
+
+    // Tactile Feedback Simulation for Attendance Capture
+    const shutterBtn = document.getElementById('btnShutter');
+    if (shutterBtn) {
+      shutterBtn.addEventListener('click', () => {
+        if ('vibrate' in navigator) {
+          navigator.vibrate(60);
+        }
+      });
+    }
+  </script>
+</body></html>

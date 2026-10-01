@@ -1,3 +1,6 @@
+// E-Presensi UI · Modern Shadcn Bottom Sheet Modal
+// Clean hairline border, soft overlay backdrop, accessible close button.
+
 import React from 'react';
 import {
   Modal as RNModal,
@@ -8,7 +11,8 @@ import {
 } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { Feather } from '@expo/vector-icons';
-import { colors, fontSize, radius, spacing } from '../../theme';
+import { colors, fontSize, neoShadow, radius, spacing } from '../../theme';
+import { tap } from '../../services/feedbackService';
 
 interface ModalProps {
   visible: boolean;
@@ -21,12 +25,19 @@ export const Modal: React.FC<ModalProps> = ({ visible, onClose, title, children 
   return (
     <RNModal visible={visible} animationType="slide" transparent={true} onRequestClose={onClose}>
       <View style={styles.overlay}>
-        <SafeAreaView style={styles.sheet}>
+        <SafeAreaView style={[styles.sheet, neoShadow.lg]}>
           <View style={styles.handle} />
           <View style={styles.header}>
             <Text style={styles.title}>{title}</Text>
-            <TouchableOpacity onPress={onClose} style={styles.closeBtn} hitSlop={12}>
-              <Feather name="x" size={22} color={colors.ink} />
+            <TouchableOpacity
+              onPress={() => {
+                tap();
+                onClose();
+              }}
+              style={styles.closeBtn}
+              hitSlop={12}
+            >
+              <Feather name="x" size={20} color={colors.ink} />
             </TouchableOpacity>
           </View>
           <View style={styles.body}>{children}</View>
@@ -39,26 +50,28 @@ export const Modal: React.FC<ModalProps> = ({ visible, onClose, title, children 
 const styles = StyleSheet.create({
   overlay: {
     flex: 1,
-    backgroundColor: 'rgba(12, 27, 42, 0.5)',
+    backgroundColor: 'rgba(15, 23, 42, 0.45)',
     justifyContent: 'flex-end',
   },
   sheet: {
     backgroundColor: colors.surface,
-    borderTopLeftRadius: 24,
-    borderTopRightRadius: 24,
+    borderTopLeftRadius: radius.xl,
+    borderTopRightRadius: radius.xl,
+    borderWidth: 1,
+    borderColor: colors.border,
     maxHeight: '90%',
     minHeight: '40%',
     paddingHorizontal: spacing.lg,
     paddingTop: spacing.sm,
     paddingBottom: spacing.xl,
-    maxWidth: 520,
+    maxWidth: 540,
     width: '100%',
     alignSelf: 'center',
   },
   handle: {
     width: 44,
-    height: 5,
-    borderRadius: 3,
+    height: 4,
+    borderRadius: 2,
     backgroundColor: colors.borderStrong,
     alignSelf: 'center',
     marginBottom: spacing.sm,
@@ -69,18 +82,19 @@ const styles = StyleSheet.create({
     justifyContent: 'space-between',
     paddingBottom: spacing.sm,
     borderBottomWidth: 1,
-    borderBottomColor: colors.border,
+    borderBottomColor: colors.borderMuted,
   },
   title: {
     fontSize: fontSize.lg,
     fontWeight: '700',
     color: colors.ink,
     flex: 1,
+    letterSpacing: -0.2,
   },
   closeBtn: {
-    width: 44,
-    height: 44,
-    borderRadius: 22,
+    width: 36,
+    height: 36,
+    borderRadius: 18,
     backgroundColor: colors.surfaceSoft,
     alignItems: 'center',
     justifyContent: 'center',
