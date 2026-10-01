@@ -54,6 +54,16 @@ const storage = multer.diskStorage({
 });
 const upload = multer({ storage, limits: { fileSize: 30 * 1024 * 1024 } });
 
+// ---- Helper datetime: ubah ISO (2026-10-01T02:30:58.997Z) ke MySQL (YYYY-MM-DD HH:MM:SS) ----
+function toMySQLDatetime(v) {
+  if (!v) return new Date().toISOString().slice(0, 19).replace('T', ' ');
+  const s = String(v).trim();
+  if (/^\d{4}-\d{2}-\d{2} \d{2}:\d{2}(:\d{2})?$/.test(s)) return s.length === 16 ? s + ':00' : s;
+  const d = new Date(s);
+  if (!isNaN(d.getTime())) return d.toISOString().slice(0, 19).replace('T', ' ');
+  return new Date().toISOString().slice(0, 19).replace('T', ' ');
+}
+
 // ---- Root & Health ----
 app.get('/', (req, res) => {
   res.json({
@@ -290,7 +300,7 @@ app.post('/attendances', authRequired, async (req, res) => {
        VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?)`,
       [
         me.id, me.full_name, me.email, b.type, sessionType, b.status, b.date,
-        b.clockInTime || b.clock_in_time || new Date().toISOString().slice(0, 19).replace('T', ' '),
+        toMySQLDatetime(b.clockInTime || b.clock_in_time),
         b.latitude ?? null, b.longitude ?? null, b.distanceMeters ?? b.distance_meters ?? null,
         b.officeName ?? b.office_name ?? null, b.officeColor ?? b.office_color ?? null,
         b.reason ?? null, b.startDate ?? b.start_date ?? null, b.endDate ?? b.end_date ?? null,
