@@ -46,9 +46,7 @@
         "expo-build-properties",
         {
           "android": {
-            "enableProguardInReleaseBuilds": true,
-            "extraProguardRules": "-dontwarn com.facebook.react.**\n-keep class com.facebook.react.** { *; }",
-            "abiFilters": ["arm64-v8a", "armeabi-v7a"]
+            "abiFilters": ["arm64-v8a"]
           }
         }
       ]
