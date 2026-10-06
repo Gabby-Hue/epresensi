@@ -82,18 +82,40 @@ const getMonthStart = (): Date => {
   return new Date(n.getFullYear(), n.getMonth(), 1, 0, 0, 0, 0);
 };
 
-const formatLogDate = (iso: string): string =>
-  new Date(iso).toLocaleDateString('id-ID', {
-    weekday: 'short',
-    day: 'numeric',
-    month: 'short',
-  });
+const safeParseDate = (v?: any): Date | null => {
+  if (!v) return null;
+  if (v instanceof Date) return isNaN(v.getTime()) ? null : v;
+  const s = String(v).trim().replace(' ', 'T');
+  const d = new Date(s);
+  return isNaN(d.getTime()) ? null : d;
+};
 
-const formatLogTime = (iso: string): string =>
-  new Date(iso).toLocaleTimeString('id-ID', {
-    hour: '2-digit',
-    minute: '2-digit',
-  });
+const formatLogDate = (iso?: string | null): string => {
+  const d = safeParseDate(iso);
+  if (!d) return '-';
+  try {
+    return d.toLocaleDateString('id-ID', {
+      weekday: 'short',
+      day: 'numeric',
+      month: 'short',
+    });
+  } catch {
+    return '-';
+  }
+};
+
+const formatLogTime = (iso?: string | null): string => {
+  const d = safeParseDate(iso);
+  if (!d) return '--:--';
+  try {
+    return d.toLocaleTimeString('id-ID', {
+      hour: '2-digit',
+      minute: '2-digit',
+    });
+  } catch {
+    return '--:--';
+  }
+};
 
 export const AttendanceHub: React.FC<AttendanceHubProps> = ({
   user,
@@ -266,17 +288,22 @@ export const AttendanceHub: React.FC<AttendanceHubProps> = ({
   // Rekap Presensi Bulan Ini (ala Stitch Enterprise: Hadir Tepat, Terlambat, Izin/Cuti)
   const currentMonthStart = getMonthStart();
   const currentMonthName = new Date().toLocaleDateString('id-ID', { month: 'long' });
-  const monthAllRecords = userHistory.filter((r) => new Date(r.clockInTime) >= currentMonthStart);
+  const monthAllRecords = userHistory.filter((r) => {
+    const d = safeParseDate(r.clockInTime || r.createdAt || r.date);
+    return d ? d >= currentMonthStart : false;
+  });
 
   const onTimeCount = monthAllRecords.filter((r) => {
-      if (r.sessionType !== 'masuk') return false;
-      return !isAfterTimeOfDay(new Date(r.clockInTime), 10, 0);
-    }).length;
+    if (r.sessionType !== 'masuk') return false;
+    const d = safeParseDate(r.clockInTime);
+    return d ? !isAfterTimeOfDay(d, 10, 0) : false;
+  }).length;
 
-    const lateCount = monthAllRecords.filter((r) => {
-      if (r.sessionType !== 'masuk') return false;
-      return isAfterTimeOfDay(new Date(r.clockInTime), 10, 0);
-    }).length;
+  const lateCount = monthAllRecords.filter((r) => {
+    if (r.sessionType !== 'masuk') return false;
+    const d = safeParseDate(r.clockInTime);
+    return d ? isAfterTimeOfDay(d, 10, 0) : false;
+  }).length;
 
   const leaveCount = monthAllRecords.filter(
     (r) => r.type === 'izin_sakit' || r.sessionType === 'izin_sakit'
@@ -292,23 +319,35 @@ export const AttendanceHub: React.FC<AttendanceHubProps> = ({
     if (r.type !== 'izin_sakit' && r.sessionType !== 'izin_sakit') return false;
     const start = r.startDate || r.date;
     const end = r.endDate || r.date;
-    return todayStr >= start && todayStr <= end;
+    return !!(start && end && todayStr >= start && todayStr <= end);
   });
 
   // Semua riwayat izin/sakit pengguna
   const userLeaves = userHistory
     .filter((r) => r.type === 'izin_sakit' || r.sessionType === 'izin_sakit')
-    .sort((a, b) => new Date(b.clockInTime || b.createdAt).getTime() - new Date(a.clockInTime || a.createdAt).getTime());
+    .sort((a, b) => {
+      const tA = safeParseDate(a.createdAt || a.clockInTime || a.date)?.getTime() || 0;
+      const tB = safeParseDate(b.createdAt || b.clockInTime || b.date)?.getTime() || 0;
+      return tB - tA;
+    });
 
   // Log kehadiran lengkap (masuk, pulang, dan izin/sakit)
-  const allLogs = [...userHistory].sort(
-    (a, b) => new Date(b.clockInTime || b.createdAt).getTime() - new Date(a.clockInTime || a.createdAt).getTime()
-  );
+  const allLogs = [...userHistory].sort((a, b) => {
+    const tA = safeParseDate(a.clockInTime || a.createdAt || a.date)?.getTime() || 0;
+    const tB = safeParseDate(b.clockInTime || b.createdAt || b.date)?.getTime() || 0;
+    return tB - tA;
+  });
 
   const weekStart = getWeekStart();
   const monthStart = getMonthStart();
-  const weekLogs = allLogs.filter((r) => new Date(r.clockInTime || r.createdAt) >= weekStart);
-  const monthLogs = allLogs.filter((r) => new Date(r.clockInTime || r.createdAt) >= monthStart);
+  const weekLogs = allLogs.filter((r) => {
+    const d = safeParseDate(r.clockInTime || r.createdAt || r.date);
+    return d ? d >= weekStart : false;
+  });
+  const monthLogs = allLogs.filter((r) => {
+    const d = safeParseDate(r.clockInTime || r.createdAt || r.date);
+    return d ? d >= monthStart : false;
+  });
 
   // Status izin aktif hari ini (pending atau approved): memblokir absen masuk & pulang
   const isLeaveActiveToday = !!todayLeave && todayLeave.approvalStatus !== 'rejected';
@@ -487,11 +526,22 @@ export const AttendanceHub: React.FC<AttendanceHubProps> = ({
           : 'Ambil Foto & Absen Pulang';
 
   const renderLogRow = (item: AttendanceRecord) => {
+    const isLeave = item.type === 'izin_sakit' || item.sessionType === 'izin_sakit';
     const isMasuk = item.sessionType === 'masuk';
     // Absen di Sabtu/Minggu atau Hari Libur Nasional = lembur (override tanggal merah)
     const isLembur =
+      !isLeave &&
       (isWeekendDateString(item.date) || isNationalHoliday(item.date)) &&
       (item.sessionType === 'masuk' || item.sessionType === 'pulang');
+
+    const logTitleText = isLeave
+      ? (item.status === 'sakit' ? 'Sakit' : 'Izin')
+      : isLembur
+      ? 'Lembur'
+      : isMasuk
+      ? 'Masuk'
+      : 'Pulang';
+
     return (
       <TouchableOpacity
         key={item.id}
@@ -503,19 +553,24 @@ export const AttendanceHub: React.FC<AttendanceHubProps> = ({
           <Image source={{ uri: item.photoUrl }} style={styles.logThumb} />
         ) : (
           <View style={styles.logFallback}>
-            <Feather name="camera" size={20} color={colors.faint} />
+            <Feather
+              name={isLeave ? (item.status === 'sakit' ? 'activity' : 'calendar') : 'camera'}
+              size={20}
+              color={colors.faint}
+            />
           </View>
         )}
         <View style={styles.logInfo}>
           <Text style={styles.logTitle}>
-            {isLembur ? 'Lembur' : isMasuk ? 'Masuk' : 'Pulang'}
+            {logTitleText}
             {' • '}
-            {formatLogDate(item.clockInTime)}
+            {formatLogDate(item.clockInTime || item.createdAt || item.date)}
           </Text>
           <Text style={styles.logSub}>
-            {formatLogTime(item.clockInTime)} WIB
-            {item.distanceMeters ? ` • ${item.distanceMeters} m` : ''}
-            {item.officeName ? (
+            {isLeave
+              ? `Pengajuan: ${item.startDate || item.date} s.d. ${item.endDate || item.date}`
+              : `${formatLogTime(item.clockInTime)} WIB${item.distanceMeters ? ` • ${item.distanceMeters} m` : ''}`}
+            {item.officeName && !isLeave ? (
               <>
                 {' • '}
                 {item.officeColor ? <Text style={{ color: item.officeColor }}>● </Text> : null}
@@ -624,11 +679,11 @@ export const AttendanceHub: React.FC<AttendanceHubProps> = ({
             <Feather name="check-circle" size={18} color={colors.successInk} style={{ marginRight: 8 }} />
             <View style={{ flex: 1 }}>
               <Text style={styles.todaySuccessTitle}>
-                Presensi {userTodayStatus.sessionType === 'pulang' ? 'pulang' : 'masuk'} sudah tercatat jam {new Date(userTodayStatus.clockInTime).toLocaleTimeString('id-ID', { hour: '2-digit', minute: '2-digit' })} WIB
+                Presensi {userTodayStatus.sessionType === 'pulang' ? 'pulang' : 'masuk'} sudah tercatat jam {formatLogTime(userTodayStatus.clockInTime)} WIB
               </Text>
               {lastSavedAt && (
                 <Text style={styles.todaySuccessSub}>
-                  Tersimpan di server: {new Date(lastSavedAt).toLocaleTimeString('id-ID', { hour: '2-digit', minute: '2-digit' })} WIB
+                  Tersimpan di server: {formatLogTime(lastSavedAt)} WIB
                 </Text>
               )}
             </View>

@@ -51,10 +51,11 @@ export const AttendanceHistory: React.FC<AttendanceHistoryProps> = ({ history })
                 <Text style={styles.dateText}>{record.date}</Text>
                 <Text style={styles.timeText}>
                   Jam masuk:{' '}
-                  {new Date(record.clockInTime).toLocaleTimeString('id-ID', {
-                    hour: '2-digit',
-                    minute: '2-digit',
-                  })}{' '}
+                  {(() => {
+                    const s = String(record.clockInTime || '').trim().replace(' ', 'T');
+                    const d = new Date(s);
+                    return isNaN(d.getTime()) ? '--:--' : d.toLocaleTimeString('id-ID', { hour: '2-digit', minute: '2-digit' });
+                  })()}{' '}
                   WIB {record.distanceMeters ? `• ${record.distanceMeters}m` : ''}
                   {record.officeName ? ` • ${record.officeName}` : ''}
                 </Text>
@@ -89,7 +90,11 @@ export const AttendanceHistory: React.FC<AttendanceHistoryProps> = ({ history })
 
             <View style={styles.infoBox}>
               <Text style={styles.infoText}>
-                Waktu: {new Date(selectedItem.clockInTime).toLocaleTimeString('id-ID')} WIB
+                Waktu: {(() => {
+                  const s = String(selectedItem.clockInTime || '').trim().replace(' ', 'T');
+                  const d = new Date(s);
+                  return isNaN(d.getTime()) ? '--:--' : d.toLocaleTimeString('id-ID');
+                })()} WIB
               </Text>
               {selectedItem.officeName ? (
                 <Text style={styles.infoText}>
