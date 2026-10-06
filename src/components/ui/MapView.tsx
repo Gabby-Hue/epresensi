@@ -1,5 +1,5 @@
 // Hallmark Component · MapView (Geofence & Precision Radar HUD)
-// Anti-AI-slop: Precision geographic HUD, clean radar pulse (redup nyala), crisp hairline boundaries.
+// Anti-AI-slop: Precision geographic HUD, clean radar pulse (redup nyala), crisp hairline boundaries, super zoom enabled.
 
 import React, { useEffect } from 'react';
 import { Platform, StyleSheet, View } from 'react-native';
@@ -15,7 +15,7 @@ interface MapViewProps {
   radiusMeters: number;
   /** Semua titik kantor untuk digambar sekaligus (opsional, fallback ke 1 titik di atas). */
   offices?: Pick<OfficeSettings, 'id' | 'officeName' | 'latitude' | 'longitude' | 'radiusMeters' | 'color'>[];
-  /** Nama titik yang sedang aktif / terpilih (untuk highlight). */
+  /** ID titik kantor yang sedang aktif / terpilih (untuk highlight). */
   activeOfficeId?: string | null;
   /** Warna lingkaran + penanda utama (default biru). */
   mainColor?: string;
@@ -58,7 +58,7 @@ export const MapView: React.FC<MapViewProps> = ({
     }
   }, [interactivePicker, onLocationSelect]);
 
-  const spots = (offices && offices.length > 0
+  const rawSpots = (offices && offices.length > 0
     ? offices
     : [{ id: 'single', officeName: 'Titik Kantor', latitude: officeLat, longitude: officeLng, radiusMeters }]
   ).map((o) => ({
@@ -69,9 +69,29 @@ export const MapView: React.FC<MapViewProps> = ({
     rad: Number(o.radiusMeters),
     color: /^#[0-9a-fA-F]{6}$/.test((o as any).color || '') ? (o as any).color : colors.primary,
   }));
+
+  // Deteksi duplikasi koordinat agar tidak menumpuk 100% pada titik yang sama
+  const coordCounts: Record<string, number> = {};
+  const spots = rawSpots.map((s) => {
+    const key = `${s.lat.toFixed(6)},${s.lng.toFixed(6)}`;
+    const count = coordCounts[key] || 0;
+    coordCounts[key] = count + 1;
+    if (count > 0) {
+      // Sedikit offset mikro (sekitar 3-5 meter) agar dua titik yang belum disetel posisinya tetap terlihat terpisah
+      const angle = (count * 2 * Math.PI) / 6;
+      return {
+        ...s,
+        displayLat: Number((s.lat + 0.00004 * Math.sin(angle)).toFixed(6)),
+        displayLng: Number((s.lng + 0.00004 * Math.cos(angle)).toFixed(6)),
+        isStacked: true,
+      };
+    }
+    return { ...s, displayLat: s.lat, displayLng: s.lng, isStacked: false };
+  });
+
   const spotsJson = JSON.stringify(spots);
   const activeIdJson = JSON.stringify(activeOfficeId ?? null);
-  const main = /^#[0-9a-fA-F]{6}$/.test(mainColor || '') ? mainColor as string : colors.primary;
+  const main = /^#[0-9a-fA-F]{6}$/.test(mainColor || '') ? (mainColor as string) : colors.primary;
 
   const htmlContent = `
     <!DOCTYPE html>
@@ -82,9 +102,12 @@ export const MapView: React.FC<MapViewProps> = ({
         <script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js"></script>
         <style>
           html, body, #map { height: 100%; width: 100%; margin: 0; padding: 0; background: #F8FAFC; font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif; }
-          .leaflet-control-attribution { font-size: 9px !important; background: rgba(255,255,255,0.7) !important; padding: 2px 6px !important; }
+          .leaflet-control-attribution { font-size: 9px !important; background: rgba(255,255,255,0.8) !important; padding: 2px 6px !important; }
+          .leaflet-bar { border-radius: 8px !important; box-shadow: 0 2px 6px rgba(15,23,42,0.18) !important; border: 1px solid #E2E8F0 !important; overflow: hidden; }
+          .leaflet-bar a { background-color: #FFFFFF !important; color: #1E293B !important; width: 32px !important; height: 32px !important; line-height: 32px !important; font-size: 16px !important; font-weight: bold !important; }
+          .leaflet-bar a:hover { background-color: #F1F5F9 !important; }
           
-          /* Calibrated Precision Radar Pulse (Redup Nyala) */
+          /* Calibrated Precision Radar Pulse */
           @keyframes radar-pulse {
             0% { transform: scale(0.6); opacity: 0.9; }
             45% { opacity: 0.35; }
@@ -133,22 +156,46 @@ export const MapView: React.FC<MapViewProps> = ({
             animation: radar-core 2.2s ease-in-out infinite;
             z-index: 2;
           }
-          .office-icon {
-            background: #0061A4;
-            border: 2px solid #FFFFFF;
-            border-radius: 50%;
-            box-shadow: 0 2px 6px rgba(15, 23, 42, 0.25);
+          
+          /* Target Picker Pin (Khusus Mode Pilih Lokasi Admin) */
+          .picker-pin-wrap {
+            position: relative;
+            width: 32px;
+            height: 42px;
+            cursor: pointer;
+            filter: drop-shadow(0 3px 6px rgba(15, 23, 42, 0.35));
           }
-          .spot-icon {
-            background: #38BDF8;
-            border: 2px solid #FFFFFF;
+          .picker-pin-pulse {
+            position: absolute;
+            bottom: 0px;
+            left: 7px;
+            width: 18px;
+            height: 18px;
             border-radius: 50%;
-            box-shadow: 0 1px 4px rgba(15, 23, 42, 0.2);
+            background: rgba(234, 88, 12, 0.4);
+            animation: radar-pulse 1.8s ease-out infinite;
+          }
+          
+          .zoom-hud-badge {
+            position: absolute;
+            bottom: 12px;
+            right: 12px;
+            z-index: 1000;
+            background: rgba(255, 255, 255, 0.92);
+            backdrop-filter: blur(4px);
+            padding: 4px 8px;
+            border-radius: 6px;
+            font-size: 11px;
+            font-weight: 700;
+            color: #334155;
+            border: 1px solid #CBD5E1;
+            pointer-events: none;
           }
         </style>
       </head>
       <body>
         <div id="map"></div>
+        <div id="zoom-badge" class="zoom-hud-badge">Zoom: 17x</div>
         <script>
           var oLat = Number(${officeLat}) || -6.2088;
           var oLng = Number(${officeLng}) || 106.8456;
@@ -158,84 +205,128 @@ export const MapView: React.FC<MapViewProps> = ({
           var spots = ${spotsJson};
           var activeId = ${activeIdJson};
           var mainC = '${main}';
+          var isPicker = ${interactivePicker ? 'true' : 'false'};
 
+          // Konfigurasi Peta dengan SUPER-ZOOM (mendukung hingga zoom 21)
           var map = L.map('map', {
-            zoomControl: false,
-            minZoom: 10,
-            maxZoom: 19
-          }).setView([oLat, oLng], 16);
+            zoomControl: true,
+            minZoom: 3,
+            maxZoom: 21,
+            scrollWheelZoom: true,
+            touchZoom: true,
+            doubleClickZoom: true
+          }).setView([oLat, oLng], 17);
 
-          L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png', {
-            minZoom: 10,
-            maxZoom: 19,
-            attribution: 'OpenStreetMap'
+          // Tile layer dengan overscaling (maxNativeZoom 19, maxZoom 21) untuk detail maksimal
+          L.tileLayer('https://{s}.tile.openstreetmap.fr/hot/{z}/{x}/{y}.png', {
+            minZoom: 3,
+            maxNativeZoom: 19,
+            maxZoom: 21,
+            attribution: '&copy; OpenStreetMap contributors'
           }).addTo(map);
 
-          // Geofence Circle (titik utama / terpilih)
-          var circle = L.circle([oLat, oLng], {
+          // Update HUD zoom indicator
+          var zoomBadge = document.getElementById('zoom-badge');
+          map.on('zoomend', function() {
+            if (zoomBadge) zoomBadge.innerText = 'Zoom: ' + map.getZoom() + 'x';
+          });
+          zoomBadge.innerText = 'Zoom: ' + map.getZoom() + 'x';
+
+          // Geofence Circle untuk titik yang sedang aktif / diedit
+          var targetCircle = L.circle([oLat, oLng], {
             color: mainC,
             fillColor: mainC,
             fillOpacity: 0.16,
-            weight: 1.5,
+            weight: 2,
             radius: rad
           }).addTo(map);
 
-          // Office Marker (titik utama / terpilih)
-          var officeIcon = L.divIcon({
-            className: 'office-icon',
-            html: '<div style="width:16px;height:16px;border-radius:50%;background:' + mainC + ';border:2px solid #FFFFFF;box-shadow:0 1px 5px rgba(15,23,42,0.3);"></div>',
-            iconSize: [16, 16]
-          });
-          var officeMarker = L.marker([oLat, oLng], { icon: officeIcon }).addTo(map).bindPopup("<b>Titik Kantor</b>");
+          // Marker Target / Titik Terpilih
+          // Jika mode interactivePicker: gunakan Pin Penanda Target yang jelas agar tidak mirip spot bulat
+          var targetIcon = isPicker
+            ? L.divIcon({
+                className: 'picker-pin-wrapper',
+                html: '<div class="picker-pin-wrap">' +
+                        '<div class="picker-pin-pulse"></div>' +
+                        '<svg width="32" height="42" viewBox="0 0 32 42" fill="none" xmlns="http://www.w3.org/2000/svg">' +
+                          '<path d="M16 0C7.16344 0 0 7.16344 0 16C0 26.5 14.5 40.5 15.3 41.3C15.7 41.7 16.3 41.7 16.7 41.3C17.5 40.5 32 26.5 32 16C32 7.16344 24.8366 0 16 0Z" fill="' + mainC + '"/>' +
+                          '<circle cx="16" cy="16" r="6.5" fill="#FFFFFF"/>' +
+                        '</svg>' +
+                      '</div>',
+                iconSize: [32, 42],
+                iconAnchor: [16, 42],
+                popupAnchor: [0, -42]
+              })
+            : L.divIcon({
+                className: 'office-icon',
+                html: '<div style="width:18px;height:18px;border-radius:50%;background:' + mainC + ';border:2.5px solid #FFFFFF;box-shadow:0 2px 6px rgba(15,23,42,0.35);"></div>',
+                iconSize: [18, 18],
+                iconAnchor: [9, 9]
+              });
 
-          // Semua titik kantor: lingkaran + penanda + nama
+          var targetMarker = L.marker([oLat, oLng], { icon: targetIcon, zIndexOffset: 1000 }).addTo(map);
+          targetMarker.bindPopup("<b>" + (isPicker ? "Titik Terpilih (Geser/Ketuk Peta)" : "Titik Kantor Utama") + "</b>");
+
+          // RENDER TITIK-TITIK KANTOR LAINNYA
+          // KUNCI PERBAIKAN: Jika titik kantor ini adalah titik yang sedang diedit (activeId) ATAU koordinatnya sama persis dengan oLat,oLng,
+          // JANGAN dirender lagi agar tidak ada marker ganda yang saling menumpuk!
           try {
-            var spotIcon = function(isActive, color) {
-              var c = (/^#[0-9a-fA-F]{6}$/.test(color || '') ? color : '#0061A4');
-              if (isActive) {
-                return L.divIcon({
-                  className: 'office-icon',
-                  iconSize: [16, 16],
-                });
-              }
+            var spotIcon = function(c) {
               return L.divIcon({
                 className: 'spot-icon',
-                html: '<div style="width:12px;height:12px;border-radius:50%;background:' + c + ';border:2px solid #FFFFFF;box-shadow:0 1px 4px rgba(15,23,42,0.2);"></div>',
-                iconSize: [12, 12],
+                html: '<div style="width:14px;height:14px;border-radius:50%;background:' + c + ';border:2px solid #FFFFFF;box-shadow:0 1px 4px rgba(15,23,42,0.25);"></div>',
+                iconSize: [14, 14],
+                iconAnchor: [7, 7]
               });
             };
+
             spots.forEach(function(s) {
-              var isActive = activeId && s.id === activeId;
-              var sc = (/^#[0-9a-fA-F]{6}$/.test(s.color || '') ? s.color : '#0061A4');
-              var isMainSpot = isActive || (s.lat === oLat && s.lng === oLng);
-              if (!isMainSpot) {
-                L.circle([s.lat, s.lng], {
-                  color: sc,
-                  fillColor: sc,
-                  fillOpacity: 0.12,
-                  weight: 1,
-                  radius: s.rad || rad,
-                }).addTo(map);
+              // Jika ini adalah spot yang sedang aktif/diedit, lewati karena posisinya sudah diwakili oleh targetMarker & targetCircle
+              var isCurrentTarget = (activeId && s.id === activeId) || (Math.abs(s.lat - oLat) < 0.000005 && Math.abs(s.lng - oLng) < 0.000005);
+              if (isCurrentTarget) {
+                targetMarker.bindTooltip(s.name, { permanent: false, direction: 'top' });
+                return; // STOP! Jangan buat marker kedua di titik yang sama
               }
-              L.marker([s.lat, s.lng], { icon: spotIcon(isActive, sc) })
-                .addTo(map)
-                .bindTooltip(s.name, { permanent: false, direction: 'top' });
+
+              var sc = (/^#[0-9a-fA-F]{6}$/.test(s.color || '') ? s.color : '#0061A4');
+              var lat = s.displayLat || s.lat;
+              var lng = s.displayLng || s.lng;
+
+              // Lingkaran radius spot kantor lain
+              L.circle([lat, lng], {
+                color: sc,
+                fillColor: sc,
+                fillOpacity: 0.10,
+                weight: 1,
+                radius: s.rad || rad,
+              }).addTo(map);
+
+              // Marker spot kantor lain
+              var sm = L.marker([lat, lng], { icon: spotIcon(sc) }).addTo(map);
+              sm.bindTooltip(s.name + (s.isStacked ? " (Posisi berdekatan)" : ""), { permanent: false, direction: 'top' });
+              
+              sm.on('click', function() {
+                map.flyTo([lat, lng], 19, { animate: true, duration: 0.8 });
+              });
             });
           } catch(e) {}
 
-          // User Marker (Animated Pulsing Radar Point)
-          var userIcon = L.divIcon({
-            className: 'user-marker-wrapper',
-            html: '<div class="user-location-marker">' +
-                    '<div class="user-location-pulse"></div>' +
-                    '<div class="user-location-pulse-delayed"></div>' +
-                    '<div class="user-location-core"></div>' +
-                  '</div>',
-            iconSize: [38, 38],
-            iconAnchor: [19, 19],
-            popupAnchor: [0, -19]
-          });
-          var userMarker = L.marker([uLat, uLng], { icon: userIcon }).addTo(map).bindPopup("<b>Posisi Anda Saat Ini</b>");
+          // User Marker (Animated Pulsing Radar Point) — hanya jika bukan picker murni atau lokasi user beda
+          if (!isPicker || (Math.abs(uLat - oLat) > 0.0001 || Math.abs(uLng - oLng) > 0.0001)) {
+            var userIcon = L.divIcon({
+              className: 'user-marker-wrapper',
+              html: '<div class="user-location-marker">' +
+                      '<div class="user-location-pulse"></div>' +
+                      '<div class="user-location-pulse-delayed"></div>' +
+                      '<div class="user-location-core"></div>' +
+                    '</div>',
+              iconSize: [38, 38],
+              iconAnchor: [19, 19],
+              popupAnchor: [0, -19]
+            });
+            var userMarker = L.marker([uLat, uLng], { icon: userIcon, zIndexOffset: 500 }).addTo(map);
+            userMarker.bindPopup("<b>Posisi Anda Saat Ini</b>");
+          }
 
           ${
             interactivePicker
@@ -245,8 +336,8 @@ export const MapView: React.FC<MapViewProps> = ({
             var lat = Number(e.latlng.lat.toFixed(6));
             var lng = Number(e.latlng.lng.toFixed(6));
 
-            officeMarker.setLatLng([lat, lng]);
-            circle.setLatLng([lat, lng]);
+            targetMarker.setLatLng([lat, lng]);
+            targetCircle.setLatLng([lat, lng]);
 
             var payload = JSON.stringify({ type: 'MAP_CLICK', latitude: lat, longitude: lng });
 
@@ -260,13 +351,17 @@ export const MapView: React.FC<MapViewProps> = ({
               : ''
           }
 
-          // Otomatis fokus: mencakup user + semua titik kantor
+          // Otomatis fokus: jika mode picker atau ada activeId, langsung fokus zoom ke titik tersebut
           try {
-            var bounds = [[uLat, uLng], [oLat, oLng]];
-            spots.forEach(function(s) { bounds.push([s.lat, s.lng]); });
-            map.fitBounds(bounds, { padding: [28, 28], maxZoom: 17 });
+            if (isPicker || activeId) {
+              map.setView([oLat, oLng], 17);
+            } else {
+              var bounds = [[uLat, uLng], [oLat, oLng]];
+              spots.forEach(function(s) { bounds.push([s.lat, s.lng]); });
+              map.fitBounds(bounds, { padding: [28, 28], maxZoom: 18 });
+            }
           } catch(e) {
-            map.setView([oLat, oLng], 16);
+            map.setView([oLat, oLng], 17);
           }
         </script>
       </body>

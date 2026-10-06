@@ -191,14 +191,16 @@ export const GeofenceSettings: React.FC<OfficeManagerProps> = ({
             offices={visibleOffices}
             activeOfficeId={editingId}
             mainColor={form.color}
-            height={230}
+            height={320}
             interactivePicker={true}
             onLocationSelect={(lat, lng) =>
               setForm((f) => ({ ...f, latitude: lat.toFixed(6), longitude: lng.toFixed(6) }))
             }
           />
         </View>
-        <Text style={styles.hint}>Ketuk peta untuk menaruh titik, atau pakai GPS saat ini.</Text>
+        <Text style={styles.hint}>
+          Ketuk peta untuk menaruh titik kantor. Gunakan tombol + / - atau scroll untuk zoom hingga detail jalan/bangunan.
+        </Text>
 
         {/* Daftar titik */}
         {visibleOffices.map((office) => {

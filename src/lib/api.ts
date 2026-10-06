@@ -4,8 +4,9 @@
 // hidup selama aplikasi jalan; untuk persist antar-restart pasang
 // @react-native-async-storage/async-storage lalu ganti webStore di bawah.
 
-export const apiBaseUrl =
-  process.env.EXPO_PUBLIC_API_URL || 'http://localhost:3001';
+export const apiBaseUrl = (
+  process.env.EXPO_PUBLIC_API_URL || 'http://localhost:3001'
+).replace(/\/+$/, '');
 // CATATAN URL per device (atur di .env EXPO_PUBLIC_API_URL):
 // - Web / iOS simulator : http://localhost:3001 (default)
 // - Android emulator    : http://10.0.2.2:3001

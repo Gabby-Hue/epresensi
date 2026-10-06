@@ -13,6 +13,8 @@ import { AttendanceRecord, UserProfile } from '../../types/attendance';
 import { AttendanceService } from '../../services/attendanceService';
 import { MonthAttendanceCalendar, buildAttendanceMap, getDayStatus } from '../user/MonthAttendanceCalendar';
 import { isWeekendDateString } from '../../utils/dates';
+import { isNationalHoliday, getHolidayName } from '../../utils/holidays';
+import { printAttendanceSlip } from '../../services/exportService';
 import { Badge } from '../ui/Badge';
 import { colors, fontSize, radius, spacing } from '../../theme';
 
@@ -145,6 +147,24 @@ export const AdminEmployeeRecap: React.FC<AdminEmployeeRecapProps> = ({
                 </View>
               </View>
 
+              <TouchableOpacity
+                activeOpacity={0.8}
+                onPress={() => {
+                  printAttendanceSlip({
+                    user: employee,
+                    year,
+                    month,
+                    records,
+                  });
+                }}
+                style={styles.printSlipBtn}
+                accessibilityRole="button"
+                accessibilityLabel="Cetak Slip Presensi Karyawan"
+              >
+                <Feather name="printer" size={15} color={colors.primaryDark} style={{ marginRight: 8 }} />
+                <Text style={styles.printSlipText}>Cetak Slip Presensi Bulanan (PDF)</Text>
+              </TouchableOpacity>
+
               <MonthAttendanceCalendar
                 attendances={records}
                 year={year}
@@ -168,7 +188,21 @@ export const AdminEmployeeRecap: React.FC<AdminEmployeeRecapProps> = ({
                     })}
                   </Text>
                   {dayLogs.length === 0 ? (
-                    <Text style={styles.dayEmpty}>Tidak ada absen di tanggal ini.</Text>
+                    (() => {
+                      const key = `${year}-${String(month + 1).padStart(2, '0')}-${String(day).padStart(2, '0')}`;
+                      const holiday = getHolidayName(key);
+                      if (holiday) {
+                        return (
+                          <Text style={[styles.dayEmpty, { color: colors.danger, fontWeight: '600' }]}>
+                            Hari Libur Nasional: {holiday}
+                          </Text>
+                        );
+                      }
+                      if (isWeekendDateString(key)) {
+                        return <Text style={styles.dayEmpty}>Hari libur akhir pekan (Sabtu/Minggu).</Text>;
+                      }
+                      return <Text style={styles.dayEmpty}>Tidak ada absen di tanggal ini.</Text>;
+                    })()
                   ) : (
                     dayLogs.map((r) => (
                       <View key={r.id} style={styles.logRow}>
@@ -183,7 +217,7 @@ export const AdminEmployeeRecap: React.FC<AdminEmployeeRecapProps> = ({
                           <Text style={styles.logTitle}>
                             {r.sessionType === 'izin_sakit'
                               ? 'Izin/Sakit'
-                              : isWeekendDateString(r.date)
+                              : isWeekendDateString(r.date) || isNationalHoliday(r.date)
                                 ? 'Lembur'
                                 : r.sessionType === 'pulang'
                                   ? 'Pulang'
@@ -310,6 +344,23 @@ const styles = StyleSheet.create({
     color: colors.muted,
     fontWeight: '700',
     marginTop: 2,
+  },
+  printSlipBtn: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'center',
+    backgroundColor: colors.surface,
+    borderWidth: 1,
+    borderColor: colors.borderStrong,
+    borderRadius: radius.md,
+    paddingVertical: 10,
+    paddingHorizontal: 16,
+    marginBottom: spacing.md,
+  },
+  printSlipText: {
+    fontSize: fontSize.sm,
+    fontWeight: '700',
+    color: colors.primaryDark,
   },
   dayBox: {
     marginTop: spacing.md,

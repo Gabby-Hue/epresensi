@@ -44,20 +44,32 @@ export const ProfileScreen: React.FC<ProfileScreenProps> = ({
   const [photoPickerModal, setPhotoPickerModal] = useState(false);
   const [cameraModalVisible, setCameraModalVisible] = useState(false);
 
-  const [deviceModel, setDeviceModel] = useState<string>(user.deviceModel || 'Belum terkunci');
-  const [deviceId, setDeviceId] = useState<string>(user.deviceId || '-');
+  const isAdminRole = user.role === 'admin' || user.role === 'superadmin';
+  const [deviceModel, setDeviceModel] = useState<string>(
+    isAdminRole ? 'Bebas Perangkat (Multi-Device)' : (user.deviceModel || 'Belum terkunci')
+  );
+  const [deviceId, setDeviceId] = useState<string>(isAdminRole ? '-' : (user.deviceId || '-'));
   const [deviceNote, setDeviceNote] = useState<string>(
-    user.deviceModel || user.deviceId
-      ? 'Perangkat resmi — akun terkunci di perangkat ini.'
-      : 'Belum ada perangkat terkunci.'
+    isAdminRole
+      ? 'Akun Admin/Superadmin tidak dikunci perangkat: bebas masuk dari PC, laptop, atau HP mana pun.'
+      : user.deviceModel || user.deviceId
+        ? 'Perangkat resmi: akun terkunci di perangkat ini.'
+        : 'Belum ada perangkat terkunci.'
   );
 
   useEffect(() => {
     let isMounted = true;
+    if (isAdminRole) {
+      setDeviceModel('Bebas Perangkat (Multi-Device)');
+      setDeviceId('-');
+      setDeviceNote('Akun Admin/Superadmin tidak dikunci perangkat: bebas masuk dari PC, laptop, atau HP mana pun.');
+      return;
+    }
+
     if (user.deviceModel || user.deviceId) {
       setDeviceModel(user.deviceModel || '-');
       setDeviceId(user.deviceId || '-');
-      setDeviceNote('Perangkat resmi — akun terkunci di perangkat ini.');
+      setDeviceNote('Perangkat resmi: akun terkunci di perangkat ini.');
       return () => {
         isMounted = false;
       };
@@ -67,7 +79,7 @@ export const ProfileScreen: React.FC<ProfileScreenProps> = ({
       if (isMounted) {
         setDeviceModel(info.modelName);
         setDeviceId(info.deviceId);
-        setDeviceNote('Belum terkunci — HP ini dikunci otomatis saat login berikutnya.');
+        setDeviceNote('Belum terkunci: HP ini dikunci otomatis saat login berikutnya.');
       }
     });
     return () => {

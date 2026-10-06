@@ -38,6 +38,8 @@ import { BottomNavBar, UserTabKey } from '../ui/BottomNavBar';
 import { StorageService } from '../../services/storageService';
 import { succeed, fail, select } from '../../services/feedbackService';
 import { isWeekendDateString, isAfterTimeOfDay, todayWIB } from '../../utils/dates';
+import { getHolidayName, isNationalHoliday } from '../../utils/holidays';
+import { printAttendanceSlip } from '../../services/exportService';
 import { Feather } from '@expo/vector-icons';
 import { colors, fontSize, neoShadow, radius, spacing } from '../../theme';
 
@@ -105,6 +107,7 @@ export const AttendanceHub: React.FC<AttendanceHubProps> = ({
 }) => {
   const offices = officeList.length > 0 ? officeList : [officeSettings];
   const [activeTab, setActiveTab] = useState<UserTabKey | 'izin'>('presensi');
+  const [leaveViewMode, setLeaveViewMode] = useState<'list' | 'create'>('list');
   const [mode, setMode] = useState<'masuk' | 'pulang'>('masuk');
   const [place, setPlace] = useState<'kantor' | 'rumah'>('kantor');
   const [currentDistance, setCurrentDistance] = useState<number | null>(null);
@@ -239,6 +242,19 @@ export const AttendanceHub: React.FC<AttendanceHubProps> = ({
   // Aturan jam pulang: terkunci sebelum pukul 17:00 WIB hingga batas 00:00 (23:59:59).
   const isClockOutUnlocked = curHour >= 17;
 
+  // Countdown jam pulang menuju pukul 17:00 WIB
+  const getClockOutCountdown = () => {
+    if (curHour >= 17) return '';
+    const target = new Date(currentTime);
+    target.setHours(17, 0, 0, 0);
+    const diffMs = Math.max(0, target.getTime() - currentTime.getTime());
+    const h = Math.floor(diffMs / (1000 * 60 * 60));
+    const m = Math.floor((diffMs % (1000 * 60 * 60)) / (1000 * 60));
+    if (h > 0) return `${h} jam ${m} mnt lagi`;
+    return `${m} mnt lagi`;
+  };
+  const clockOutCountdownText = getClockOutCountdown();
+
   // Inisial foto profil
   const initials = user.fullName
     .split(' ')
@@ -266,25 +282,62 @@ export const AttendanceHub: React.FC<AttendanceHubProps> = ({
     (r) => r.type === 'izin_sakit' || r.sessionType === 'izin_sakit'
   ).length;
 
-  // ---- Data untuk tombol & logs (khusus sesi masuk / pulang) ----
-    const todayStr = todayWIB();
+  // ---- Data untuk tombol & logs (sesi masuk, pulang, dan izin) ----
+  const todayStr = todayWIB();
   const todayMasuk = userHistory.find((r) => r.date === todayStr && r.sessionType === 'masuk');
   const todayPulang = userHistory.find((r) => r.date === todayStr && r.sessionType === 'pulang');
 
-  const masukPulangLogs = userHistory
-    .filter((r) => r.sessionType === 'masuk' || r.sessionType === 'pulang')
-    .sort((a, b) => new Date(b.clockInTime).getTime() - new Date(a.clockInTime).getTime());
+  // Izin / sakit yang mencakup hari ini
+  const todayLeave = userHistory.find((r) => {
+    if (r.type !== 'izin_sakit' && r.sessionType !== 'izin_sakit') return false;
+    const start = r.startDate || r.date;
+    const end = r.endDate || r.date;
+    return todayStr >= start && todayStr <= end;
+  });
+
+  // Semua riwayat izin/sakit pengguna
+  const userLeaves = userHistory
+    .filter((r) => r.type === 'izin_sakit' || r.sessionType === 'izin_sakit')
+    .sort((a, b) => new Date(b.clockInTime || b.createdAt).getTime() - new Date(a.clockInTime || a.createdAt).getTime());
+
+  // Log kehadiran lengkap (masuk, pulang, dan izin/sakit)
+  const allLogs = [...userHistory].sort(
+    (a, b) => new Date(b.clockInTime || b.createdAt).getTime() - new Date(a.clockInTime || a.createdAt).getTime()
+  );
 
   const weekStart = getWeekStart();
   const monthStart = getMonthStart();
-  const weekLogs = masukPulangLogs.filter((r) => new Date(r.clockInTime) >= weekStart);
-  const monthLogs = masukPulangLogs.filter((r) => new Date(r.clockInTime) >= monthStart);
+  const weekLogs = allLogs.filter((r) => new Date(r.clockInTime || r.createdAt) >= weekStart);
+  const monthLogs = allLogs.filter((r) => new Date(r.clockInTime || r.createdAt) >= monthStart);
+
+  // Status izin aktif hari ini (pending atau approved): memblokir absen masuk & pulang
+  const isLeaveActiveToday = !!todayLeave && todayLeave.approvalStatus !== 'rejected';
 
   const handleMainAction = () => {
-    // Jika memilih mode pulang dan belum jam 17:00 WIB
+    // 1. Blokir presensi jika sudah mengajukan izin / sakit hari ini (izin overwrite kehadiran)
+    if (isLeaveActiveToday) {
+      setBlockedMessage(
+        `Anda memiliki pengajuan ${todayLeave.status === 'sakit' ? 'sakit' : 'izin'} yang aktif untuk hari ini (${todayLeave.approvalStatus === 'approved' ? 'sudah disetujui' : 'menunggu persetujuan admin'}). Anda tidak perlu melakukan presensi masuk atau pulang.`
+      );
+      setShowBlockedDialog(true);
+      return;
+    }
+
+    // 2. Anti duplikat: sudah masuk/pulang hari ini -> blok (klient atau server block).
+    if ((mode === 'masuk' && todayMasuk) || (mode === 'pulang' && todayPulang)) {
+      const sesi = mode === 'masuk' ? 'masuk' : 'pulang';
+      const sudah = (mode === 'masuk' ? todayMasuk : todayPulang)!;
+      setBlockedMessage(
+        `Presensi ${sesi} hari ini sudah tersimpan jam ${formatLogTime(sudah.clockInTime)} WIB. Tidak bisa absen dua kali.`
+      );
+      setShowBlockedDialog(true);
+      return;
+    }
+
+    // 3. Jika memilih mode pulang dan belum jam 17:00 WIB
     if (mode === 'pulang' && !isClockOutUnlocked) {
       setBlockedMessage(
-        'Presensi pulang saat ini terkunci. Sesuai jam operasional, presensi pulang hanya dapat direkam mulai pukul 17:00 hingga 00:00 WIB.'
+        `Presensi pulang saat ini terkunci. Sesuai jam operasional, presensi pulang dibuka dalam ${clockOutCountdownText || 'pukul 17:00 WIB'}.`
       );
       setShowBlockedDialog(true);
       return;
@@ -417,20 +470,28 @@ export const AttendanceHub: React.FC<AttendanceHubProps> = ({
     }
   };
 
+  const isSessionDone = !!
+    ((mode === 'masuk' && todayMasuk) || (mode === 'pulang' && todayPulang));
+
   const mainButtonTitle =
-    mode === 'masuk'
-      ? isLateCheckIn
-        ? 'Absen Masuk (Terlambat)'
-        : 'Absen Masuk (Tepat Waktu)'
-      : !isClockOutUnlocked
-        ? 'Presensi Pulang Terkunci (Buka 17:00)'
-        : 'Absen Pulang';
+    isLeaveActiveToday
+      ? `Izin ${todayLeave?.status === 'sakit' ? 'Sakit' : 'Izin'} Aktif (Tidak Perlu Absen)`
+      : isSessionDone
+      ? `Presensi ${mode === 'masuk' ? 'Masuk' : 'Pulang'} Sudah Selesai`
+      : mode === 'masuk'
+        ? isLateCheckIn
+          ? 'Ambil Foto & Absen Masuk (Terlambat)'
+          : 'Ambil Foto & Absen Masuk'
+        : !isClockOutUnlocked
+          ? `Presensi Pulang Terkunci (${clockOutCountdownText || 'Buka 17:00'})`
+          : 'Ambil Foto & Absen Pulang';
 
   const renderLogRow = (item: AttendanceRecord) => {
     const isMasuk = item.sessionType === 'masuk';
-    // Absen di Sabtu/Minggu = lembur (override tanggal merah)
+    // Absen di Sabtu/Minggu atau Hari Libur Nasional = lembur (override tanggal merah)
     const isLembur =
-      isWeekendDateString(item.date) && (item.sessionType === 'masuk' || item.sessionType === 'pulang');
+      (isWeekendDateString(item.date) || isNationalHoliday(item.date)) &&
+      (item.sessionType === 'masuk' || item.sessionType === 'pulang');
     return (
       <TouchableOpacity
         key={item.id}
@@ -504,8 +565,8 @@ export const AttendanceHub: React.FC<AttendanceHubProps> = ({
         contentContainerStyle={styles.scroll}
         keyboardShouldPersistTaps="handled"
       >
-        {/* 1. Header Profil & Telemetri Waktu */}
-        <View style={styles.masthead}>
+        {/* 1. Header Profil & Informasi Kerja */}
+        <View style={[styles.masthead, neoShadow.sm]}>
           <View style={styles.mastheadTopRow}>
             <View style={styles.employeeInfo}>
               <Text style={styles.greetingText}>{greeting},</Text>
@@ -513,13 +574,15 @@ export const AttendanceHub: React.FC<AttendanceHubProps> = ({
                 {user.fullName}
               </Text>
               <Text style={styles.employeeMeta}>
-                {user.department || 'Operasional'} • ID {user.id ? `EP-${String(user.id).padStart(4, '0')}` : 'EP-0001'}
+                {user.department || 'Karyawan'}
               </Text>
             </View>
 
-            <View style={styles.clockTelemetry}>
-              <Text style={styles.clockDigits}>{currentTimeString}</Text>
-              <Text style={styles.clockDateText}>{todayLabel}</Text>
+            <View style={styles.dateBadge}>
+              <Text style={styles.dateBadgeDay}>{todayLabel}</Text>
+              <Text style={styles.dateBadgeTime}>
+                {String(curHour).padStart(2, '0')}:{String(curMin).padStart(2, '0')} WIB
+              </Text>
             </View>
           </View>
 
@@ -527,11 +590,11 @@ export const AttendanceHub: React.FC<AttendanceHubProps> = ({
 
           <View style={styles.mastheadBottomRow}>
             <View style={styles.shiftCol}>
-              <Text style={styles.bottomRowLabel}>Jadwal Shift</Text>
+              <Text style={styles.bottomRowLabel}>Jadwal Kerja</Text>
               <View style={styles.shiftValueRow}>
-                <Text style={styles.shiftTimeText}>08:00 – 17:00</Text>
+                <Text style={styles.shiftTimeText}>08:00 - 17:00 WIB</Text>
                 <Text style={isLateCheckIn ? styles.lateStatusText : styles.onTimeStatusText}>
-                  • {isLateCheckIn ? 'Terlambat (> 10:00)' : 'Tepat Waktu'}
+                  {isLateCheckIn ? '• Terlambat (> 10:00)' : '• Tepat Waktu'}
                 </Text>
               </View>
             </View>
@@ -545,7 +608,7 @@ export const AttendanceHub: React.FC<AttendanceHubProps> = ({
               style={styles.recapLink}
             >
               <View style={{ alignItems: 'flex-end' }}>
-                <Text style={styles.bottomRowLabel}>Bulan Ini</Text>
+                <Text style={styles.bottomRowLabel}>Rekap Bulan Ini</Text>
                 <Text style={styles.recapValueText}>
                   {onTimeCount} Hadir • {leaveCount} Izin
                 </Text>
@@ -555,201 +618,405 @@ export const AttendanceHub: React.FC<AttendanceHubProps> = ({
           </View>
         </View>
 
-        {/* Banner Status Presensi Hari Ini (Jika sudah pernah absen) */}
+        {/* Banner Status Presensi Hari Ini (Jika sudah pernah absen masuk/pulang) */}
         {userTodayStatus && (
           <View style={[styles.todaySuccessBanner, neoShadow.sm]}>
             <Feather name="check-circle" size={18} color={colors.successInk} style={{ marginRight: 8 }} />
             <View style={{ flex: 1 }}>
               <Text style={styles.todaySuccessTitle}>
-                Sudah absen {userTodayStatus.sessionType === 'pulang' ? 'pulang' : 'masuk'} jam {new Date(userTodayStatus.clockInTime).toLocaleTimeString('id-ID', { hour: '2-digit', minute: '2-digit' })} WIB
+                Presensi {userTodayStatus.sessionType === 'pulang' ? 'pulang' : 'masuk'} sudah tercatat jam {new Date(userTodayStatus.clockInTime).toLocaleTimeString('id-ID', { hour: '2-digit', minute: '2-digit' })} WIB
               </Text>
               {lastSavedAt && (
                 <Text style={styles.todaySuccessSub}>
-                  Tersimpan di server: {new Date(lastSavedAt).toLocaleTimeString('id-ID', { hour: '2-digit', minute: '2-digit' })}
+                  Tersimpan di server: {new Date(lastSavedAt).toLocaleTimeString('id-ID', { hour: '2-digit', minute: '2-digit' })} WIB
                 </Text>
               )}
             </View>
           </View>
         )}
 
-        {/* 2. THE UNIFIED ATTENDANCE WORKBENCH CONSOLE */}
-        <View style={[styles.consoleCard, neoShadow.md]}>
-          {/* A. Session Selector (Masuk / Pulang / Pengajuan Izin) */}
-          <View style={styles.segmentedConsole}>
-            <TouchableOpacity
-              activeOpacity={0.8}
-              onPress={() => {
-                select();
-                setMode('masuk');
-              }}
-              style={[styles.segmentBtn, mode === 'masuk' && styles.segmentBtnActive]}
-            >
-              <Feather name="sunrise" size={16} color={mode === 'masuk' ? colors.masuk : colors.muted} style={{ marginBottom: 2 }} />
-              <Text style={[styles.segmentText, mode === 'masuk' && styles.segmentTextActive]}>
-                Masuk
-              </Text>
-              <Text style={[styles.segmentSub, mode === 'masuk' && { color: colors.masuk }]}>
-                {todayMasuk ? formatLogTime(todayMasuk.clockInTime) : 'Batas 10:00'}
-              </Text>
-            </TouchableOpacity>
-
-            <TouchableOpacity
-              activeOpacity={0.8}
-              onPress={() => {
-                select();
-                if (!isClockOutUnlocked) {
-                  setBlockedMessage(
-                    'Presensi pulang terkunci sebelum pukul 17:00 WIB sesuai jam operasional kantor.'
-                  );
-                  setShowBlockedDialog(true);
-                  return;
-                }
-                setMode('pulang');
-              }}
-              style={[
-                styles.segmentBtn,
-                mode === 'pulang' && styles.segmentBtnActive,
-                !isClockOutUnlocked && styles.segmentBtnLocked,
-              ]}
-            >
-              <Feather
-                name={!isClockOutUnlocked ? 'lock' : 'sunset'}
-                size={16}
-                color={mode === 'pulang' ? colors.pulang : !isClockOutUnlocked ? colors.faint : colors.muted}
-                style={{ marginBottom: 2 }}
-              />
-              <Text style={[
-                styles.segmentText,
-                mode === 'pulang' && styles.segmentTextActive,
-                !isClockOutUnlocked && { color: colors.faint },
+        {/* Banner Status Izin / Sakit Hari Ini */}
+        {todayLeave && (
+          <View style={[styles.todayLeaveBanner, neoShadow.sm]}>
+            <View style={styles.todayLeaveTopRow}>
+              <View style={{ flexDirection: 'row', alignItems: 'center', gap: 6, flex: 1 }}>
+                <View style={[
+                  styles.leaveCategoryIconWrap,
+                  { backgroundColor: todayLeave.status === 'sakit' ? colors.izinSoft : colors.primarySoft }
+                ]}>
+                  <Feather
+                    name={todayLeave.status === 'sakit' ? 'activity' : 'calendar'}
+                    size={15}
+                    color={todayLeave.status === 'sakit' ? colors.izin : colors.primary}
+                  />
+                </View>
+                <View>
+                  <Text style={styles.todayLeaveTitle}>
+                    Status Hari Ini: Pengajuan {todayLeave.status === 'sakit' ? 'Sakit' : 'Izin'}
+                  </Text>
+                  <Text style={styles.todayLeaveSub}>
+                    Periode: {todayLeave.startDate || todayLeave.date} s.d. {todayLeave.endDate || todayLeave.date}
+                  </Text>
+                </View>
+              </View>
+              <View style={[
+                styles.leaveApprovalBadge,
+                todayLeave.approvalStatus === 'approved' && { backgroundColor: colors.successSoft },
+                todayLeave.approvalStatus === 'rejected' && { backgroundColor: colors.dangerSoft },
+                todayLeave.approvalStatus === 'pending' && { backgroundColor: colors.pulangSoft },
               ]}>
-                Pulang {!isClockOutUnlocked ? '(Kunci)' : ''}
-              </Text>
-              <Text style={[styles.segmentSub, mode === 'pulang' && { color: colors.pulang }]}>
-                {todayPulang ? formatLogTime(todayPulang.clockInTime) : !isClockOutUnlocked ? 'Buka 17:00' : '17:00 – 00:00'}
-              </Text>
-            </TouchableOpacity>
-          </View>
+                <Feather
+                  name={
+                    todayLeave.approvalStatus === 'approved'
+                      ? 'check-circle'
+                      : todayLeave.approvalStatus === 'rejected'
+                      ? 'x-circle'
+                      : 'clock'
+                  }
+                  size={12}
+                  color={
+                    todayLeave.approvalStatus === 'approved'
+                      ? colors.successInk
+                      : todayLeave.approvalStatus === 'rejected'
+                      ? colors.danger
+                      : colors.pulang
+                  }
+                  style={{ marginRight: 4 }}
+                />
+                <Text style={[
+                  styles.leaveApprovalBadgeText,
+                  todayLeave.approvalStatus === 'approved' && { color: colors.successInk },
+                  todayLeave.approvalStatus === 'rejected' && { color: colors.danger },
+                  todayLeave.approvalStatus === 'pending' && { color: colors.pulang },
+                ]}>
+                  {todayLeave.approvalStatus === 'approved'
+                    ? 'Disetujui'
+                    : todayLeave.approvalStatus === 'rejected'
+                    ? 'Ditolak'
+                    : 'Menunggu Persetujuan'}
+                </Text>
+              </View>
+            </View>
 
-          {/* B. Location Mode Switch (Di Kantor vs Dari Rumah) */}
-          <View style={styles.locationToggleRow}>
-            <Text style={styles.locationSectionLabel}>Lokasi Presensi</Text>
-            <View style={styles.locationPillSwitch}>
+            {todayLeave.reason ? (
+              <Text style={styles.todayLeaveReasonText}>Alasan: "{todayLeave.reason}"</Text>
+            ) : null}
+
+            {todayLeave.reviewNote ? (
+              <View style={styles.todayLeaveNoteBox}>
+                <Text style={styles.todayLeaveNoteText}>
+                  Catatan Admin: {todayLeave.reviewNote}
+                </Text>
+              </View>
+            ) : null}
+          </View>
+        )}
+
+        {/* 2. Konsol Presensi Utama */}
+        <View style={[styles.consoleCard, neoShadow.sm]}>
+          {/* A. Pemilihan Sesi (Masuk / Pulang) */}
+          <View style={styles.sessionSection}>
+            <Text style={styles.stepTitle}>1. Sesi Presensi</Text>
+            <View style={styles.segmentedConsole}>
               <TouchableOpacity
                 activeOpacity={0.8}
                 onPress={() => {
                   select();
-                  setPlace('kantor');
+                  setMode('masuk');
                 }}
-                style={[styles.locationPillBtn, place === 'kantor' && styles.locationPillActive]}
+                style={[
+                  styles.segmentBtn,
+                  mode === 'masuk' && styles.segmentBtnActiveMasuk,
+                ]}
               >
-                <Feather name="briefcase" size={13} color={place === 'kantor' ? '#FFFFFF' : colors.muted} style={{ marginRight: 4 }} />
-                <Text style={[styles.locationPillText, place === 'kantor' && styles.locationPillTextActive]}>
-                  Di Kantor
+                <Feather
+                  name="sunrise"
+                  size={18}
+                  color={mode === 'masuk' ? colors.masuk : colors.muted}
+                  style={{ marginBottom: 4 }}
+                />
+                <Text
+                  style={[
+                    styles.segmentText,
+                    mode === 'masuk' && styles.segmentTextActiveMasuk,
+                  ]}
+                >
+                  Masuk
+                </Text>
+                <Text
+                  style={[
+                    styles.segmentSub,
+                    mode === 'masuk' && { color: colors.masuk },
+                  ]}
+                >
+                  {isLeaveActiveToday
+                    ? 'Status Izin'
+                    : todayMasuk
+                    ? `Sudah jam ${formatLogTime(todayMasuk.clockInTime)}`
+                    : 'Batas 10:00 WIB'}
                 </Text>
               </TouchableOpacity>
+
               <TouchableOpacity
                 activeOpacity={0.8}
                 onPress={() => {
                   select();
-                  setPlace('rumah');
+                  if (!isClockOutUnlocked) {
+                    setBlockedMessage(
+                      `Presensi pulang terkunci sebelum pukul 17:00 WIB. Dibuka dalam ${clockOutCountdownText || 'pukul 17:00 WIB'}.`
+                    );
+                    setShowBlockedDialog(true);
+                    return;
+                  }
+                  setMode('pulang');
                 }}
-                style={[styles.locationPillBtn, place === 'rumah' && styles.locationPillActive]}
+                style={[
+                  styles.segmentBtn,
+                  mode === 'pulang' && styles.segmentBtnActivePulang,
+                  !isClockOutUnlocked && styles.segmentBtnLocked,
+                ]}
               >
-                <Feather name="home" size={13} color={place === 'rumah' ? '#FFFFFF' : colors.muted} style={{ marginRight: 4 }} />
-                <Text style={[styles.locationPillText, place === 'rumah' && styles.locationPillTextActive]}>
-                  Dari Rumah
+                <Feather
+                  name={!isClockOutUnlocked ? 'lock' : 'sunset'}
+                  size={18}
+                  color={
+                    mode === 'pulang'
+                      ? colors.pulang
+                      : !isClockOutUnlocked
+                        ? colors.faint
+                        : colors.muted
+                  }
+                  style={{ marginBottom: 4 }}
+                />
+                <Text
+                  style={[
+                    styles.segmentText,
+                    mode === 'pulang' && styles.segmentTextActivePulang,
+                    !isClockOutUnlocked && { color: colors.faint },
+                  ]}
+                >
+                  Pulang {!isClockOutUnlocked ? '(Kunci)' : ''}
+                </Text>
+                <Text
+                  style={[
+                    styles.segmentSub,
+                    mode === 'pulang' && { color: colors.pulang },
+                  ]}
+                >
+                  {isLeaveActiveToday
+                    ? 'Status Izin'
+                    : todayPulang
+                    ? `Sudah jam ${formatLogTime(todayPulang.clockInTime)}`
+                    : !isClockOutUnlocked
+                      ? `Buka dalam ${clockOutCountdownText}`
+                      : '17:00 - 00:00 WIB'}
                 </Text>
               </TouchableOpacity>
             </View>
           </View>
 
-          {/* Reason Input if "Dari Rumah" */}
-          {place === 'rumah' && (
-            <View
-              onLayout={(e) => setReasonCardY(e.nativeEvent.layout.y)}
-              style={styles.reasonContainer}
-            >
-              <Text style={[styles.reasonLabel, reasonTouched && !reason.trim() && { color: colors.danger }]}>
-                Alasan kerja dari rumah (wajib)
-              </Text>
-              <TextInput
-                ref={reasonInputRef}
-                style={[styles.reasonInput, reasonTouched && !reason.trim() && styles.reasonInputError]}
-                placeholder="Contoh: dinas luar kota / penugasan WFH"
-                placeholderTextColor={colors.faint}
-                value={reason}
-                onChangeText={(text) => {
-                  setReason(text);
-                  if (text.trim().length > 0 && reasonTouched) setReasonTouched(false);
-                }}
-              />
-              {reasonTouched && !reason.trim() && (
-                <Text style={styles.fieldError}>Isi alasan sebelum melakukan presensi.</Text>
-              )}
+          {/* B. Lokasi Presensi */}
+          <View style={styles.locationSection}>
+            <View style={styles.locationToggleRow}>
+              <Text style={styles.stepTitle}>2. Lokasi Kehadiran</Text>
+              <View style={styles.locationPillSwitch}>
+                <TouchableOpacity
+                  activeOpacity={0.8}
+                  onPress={() => {
+                    select();
+                    setPlace('kantor');
+                  }}
+                  style={[styles.locationPillBtn, place === 'kantor' && styles.locationPillActive]}
+                >
+                  <Feather
+                    name="briefcase"
+                    size={14}
+                    color={place === 'kantor' ? '#FFFFFF' : colors.muted}
+                    style={{ marginRight: 6 }}
+                  />
+                  <Text
+                    style={[
+                      styles.locationPillText,
+                      place === 'kantor' && styles.locationPillTextActive,
+                    ]}
+                  >
+                    Di Kantor
+                  </Text>
+                </TouchableOpacity>
+
+                <TouchableOpacity
+                  activeOpacity={0.8}
+                  onPress={() => {
+                    select();
+                    setPlace('rumah');
+                  }}
+                  style={[styles.locationPillBtn, place === 'rumah' && styles.locationPillActive]}
+                >
+                  <Feather
+                    name="home"
+                    size={14}
+                    color={place === 'rumah' ? '#FFFFFF' : colors.muted}
+                    style={{ marginRight: 6 }}
+                  />
+                  <Text
+                    style={[
+                      styles.locationPillText,
+                      place === 'rumah' && styles.locationPillTextActive,
+                    ]}
+                  >
+                    Dari Rumah
+                  </Text>
+                </TouchableOpacity>
+              </View>
             </View>
-          )}
 
-          {/* C. Interactive Geofence Map */}
-          <View style={styles.mapContainer}>
-            <MapView
-              userLat={currentCoords.latitude}
-              userLng={currentCoords.longitude}
-              officeLat={nearestOffice.latitude}
-              officeLng={nearestOffice.longitude}
-              radiusMeters={nearestOffice.radiusMeters}
-              offices={offices}
-              activeOfficeId={nearestOffice.id}
-              mainColor={nearestOffice.color}
-              height={180}
-            />
-          </View>
-
-          {/* D. Live GPS Telemetry Strip */}
-          <View style={styles.radarTelemetryBar}>
-            <View style={{ flexDirection: 'row', alignItems: 'center', flex: 1, minWidth: 0 }}>
-              <View style={[styles.radarIndicatorDot, { backgroundColor: isWithinRadius ? colors.success : colors.warning }]} />
-              <Text style={styles.radarStatusText} numberOfLines={1}>
-                {place === 'kantor' ? (
-                  `${nearestOffice.officeName} • ${locLoading ? 'Mengukur...' : currentDistance !== null ? formatDistance(currentDistance) : 'Mencari GPS'} (${isWithinRadius ? 'Dalam Radius' : 'Di Luar Radius'})`
-                ) : (
-                  'Mode Presensi dari Rumah'
+            {/* Reason Input if "Dari Rumah" */}
+            {place === 'rumah' && (
+              <View
+                onLayout={(e) => setReasonCardY(e.nativeEvent.layout.y)}
+                style={styles.reasonContainer}
+              >
+                <Text
+                  style={[
+                    styles.reasonLabel,
+                    reasonTouched && !reason.trim() && { color: colors.danger },
+                  ]}
+                >
+                  Alasan kerja dari rumah (wajib)
+                </Text>
+                <TextInput
+                  ref={reasonInputRef}
+                  style={[
+                    styles.reasonInput,
+                    reasonTouched && !reason.trim() && styles.reasonInputError,
+                  ]}
+                  placeholder="Contoh: dinas luar kota / penugasan WFH"
+                  placeholderTextColor={colors.faint}
+                  value={reason}
+                  onChangeText={(text) => {
+                    setReason(text);
+                    if (text.trim().length > 0 && reasonTouched) setReasonTouched(false);
+                  }}
+                />
+                {reasonTouched && !reason.trim() && (
+                  <Text style={styles.fieldError}>Isi alasan sebelum melakukan presensi.</Text>
                 )}
-              </Text>
+              </View>
+            )}
+
+            {/* C. Interactive Geofence Map */}
+            <View style={styles.mapContainer}>
+              <MapView
+                userLat={currentCoords.latitude}
+                userLng={currentCoords.longitude}
+                officeLat={nearestOffice.latitude}
+                officeLng={nearestOffice.longitude}
+                radiusMeters={nearestOffice.radiusMeters}
+                offices={offices}
+                activeOfficeId={nearestOffice.id}
+                mainColor={nearestOffice.color}
+                height={180}
+              />
             </View>
-            <TouchableOpacity onPress={fetchLocation} style={styles.radarRefreshBtn} hitSlop={10}>
-              <Feather name="refresh-cw" size={13} color={colors.primary} />
-              <Text style={styles.radarRefreshText}>Cek GPS</Text>
-            </TouchableOpacity>
+
+            {/* D. Status Lokasi GPS Bersih */}
+            <View style={styles.locationStatusBar}>
+              <View style={styles.locationStatusLeft}>
+                <View
+                  style={[
+                    styles.statusIndicatorDot,
+                    {
+                      backgroundColor:
+                        place === 'kantor'
+                          ? isWithinRadius
+                            ? colors.success
+                            : colors.warning
+                          : colors.primary,
+                    },
+                  ]}
+                />
+                <View style={{ flex: 1 }}>
+                  <Text style={styles.locationStatusTitle} numberOfLines={1}>
+                    {place === 'kantor' ? nearestOffice.officeName : 'Presensi Dari Rumah (WFH)'}
+                  </Text>
+                  <Text style={styles.locationStatusSub} numberOfLines={1}>
+                    {place === 'kantor'
+                      ? locLoading
+                        ? 'Sedang mencari koordinat GPS...'
+                        : currentDistance !== null
+                          ? `${formatDistance(currentDistance)} • ${
+                              isWithinRadius
+                                ? 'Dalam radius kantor'
+                                : `Di luar radius (${nearestOffice.radiusMeters} m)`
+                            }`
+                          : 'Sinyal GPS belum terbaca'
+                      : 'Pastikan alasan telah diisi dengan benar'}
+                  </Text>
+                </View>
+              </View>
+
+              <TouchableOpacity
+                onPress={fetchLocation}
+                style={styles.refreshLocationBtn}
+                hitSlop={10}
+                accessibilityRole="button"
+                accessibilityLabel="Perbarui GPS"
+              >
+                <Feather name="refresh-cw" size={14} color={colors.primary} />
+                <Text style={styles.refreshLocationText}>Perbarui</Text>
+              </TouchableOpacity>
+            </View>
+
+            {(locError || gpsStale) && (
+              <View style={styles.warnBanner}>
+                <Feather name="alert-triangle" size={16} color={colors.danger} style={{ marginRight: 8 }} />
+                <Text style={styles.warnText}>
+                  {locError || 'GPS belum valid. Aktifkan lokasi perangkat Anda.'}
+                </Text>
+              </View>
+            )}
           </View>
 
-          {(locError || gpsStale) && (
-            <View style={styles.warnBanner}>
-              <Feather name="alert-triangle" size={16} color={colors.danger} style={{ marginRight: 6 }} />
-              <Text style={styles.warnText}>{locError || 'GPS belum valid. Aktifkan lokasi perangkat Anda.'}</Text>
-            </View>
-          )}
-
-          {/* E. Definitive Primary Attendance Action Button */}
+          {/* E. Tombol Aksi Utama Presensi */}
           <Button
             title={submitting ? 'Menyimpan...' : mainButtonTitle}
-            icon={mode === 'pulang' && !isClockOutUnlocked ? 'lock' : 'camera'}
+            icon={isLeaveActiveToday ? (todayLeave?.status === 'sakit' ? 'activity' : 'calendar') : (mode === 'pulang' && !isClockOutUnlocked ? 'lock' : 'camera')}
             loading={submitting}
-            disabled={mode === 'pulang' && !isClockOutUnlocked}
+            disabled={isSessionDone || isLeaveActiveToday || (mode === 'pulang' && !isClockOutUnlocked)}
             onPress={handleMainAction}
             textColor="#FFFFFF"
             style={[
               styles.consoleActionBtn,
-              mode === 'pulang' && isClockOutUnlocked && { backgroundColor: colors.pulang, borderColor: colors.pulang },
-              mode === 'pulang' && !isClockOutUnlocked && { backgroundColor: colors.faint, borderColor: colors.border },
+              isLeaveActiveToday && { backgroundColor: colors.muted, borderColor: colors.border },
+              !isLeaveActiveToday && isSessionDone && { backgroundColor: colors.success, borderColor: colors.success },
+              !isLeaveActiveToday &&
+                !isSessionDone &&
+                mode === 'pulang' &&
+                isClockOutUnlocked && {
+                  backgroundColor: colors.pulang,
+                  borderColor: colors.pulang,
+                },
+              !isLeaveActiveToday &&
+                !isSessionDone &&
+                mode === 'pulang' &&
+                !isClockOutUnlocked && {
+                  backgroundColor: colors.faint,
+                  borderColor: colors.border,
+                },
+              !isLeaveActiveToday &&
+                !isSessionDone &&
+                mode === 'masuk' && {
+                  backgroundColor: colors.masuk,
+                  borderColor: colors.masuk,
+                },
             ]}
           />
         </View>
 
-        {/* 3. Riwayat Kehadiran Minggu Ini (Clean Ledger Table) */}
+        {/* 3. Riwayat Kehadiran Minggu Ini */}
         <View style={styles.ledgerContainer}>
           <View style={styles.ledgerHeaderRow}>
-            <Text style={styles.ledgerSectionTitle}>Riwayat Minggu Ini</Text>
+            <Text style={styles.ledgerSectionTitle}>Riwayat Kehadiran Minggu Ini</Text>
             <Text style={styles.ledgerCount}>{weekLogs.length} Catatan</Text>
           </View>
           <View style={[styles.ledgerCard, neoShadow.sm]}>
@@ -765,9 +1032,29 @@ export const AttendanceHub: React.FC<AttendanceHubProps> = ({
       showsVerticalScrollIndicator={false}
       contentContainerStyle={styles.scroll}
     >
-      <View style={styles.tabHeader}>
-        <Text style={styles.greeting}>Kalender Absensi</Text>
-        <Text style={styles.date}>Pantau rekap kehadiran dan status bulanan Anda</Text>
+      <View style={styles.tabHeaderRow}>
+        <View style={{ flex: 1, marginRight: 8 }}>
+          <Text style={styles.greeting}>Kalender Absensi</Text>
+          <Text style={styles.date}>Pantau rekap kehadiran dan status bulanan Anda</Text>
+        </View>
+        <TouchableOpacity
+          activeOpacity={0.8}
+          onPress={() => {
+            select();
+            printAttendanceSlip({
+              user,
+              year: calYear,
+              month: calMonth,
+              records: userHistory,
+            });
+          }}
+          style={styles.printSlipBtn}
+          accessibilityRole="button"
+          accessibilityLabel="Cetak Slip Presensi"
+        >
+          <Feather name="printer" size={15} color={colors.primaryDark} style={{ marginRight: 6 }} />
+          <Text style={styles.printSlipText}>Cetak Slip (PDF)</Text>
+        </TouchableOpacity>
       </View>
 
       <Card style={styles.logCard}>
@@ -795,7 +1082,23 @@ export const AttendanceHub: React.FC<AttendanceHubProps> = ({
             {(() => {
               const key = `${calYear}-${String(calMonth + 1).padStart(2, '0')}-${String(calDay).padStart(2, '0')}`;
               const dayLogs = userHistory.filter((r) => r.date === key);
+              const holidayName = getHolidayName(key);
               if (dayLogs.length === 0) {
+                if (holidayName) {
+                  return (
+                    <View style={styles.holidayBannerBox}>
+                      <Feather name="flag" size={16} color={colors.danger} style={{ marginRight: 8 }} />
+                      <View style={{ flex: 1 }}>
+                        <Text style={styles.holidayBannerTitle}>Libur Nasional</Text>
+                        <Text style={styles.holidayBannerSub}>{holidayName}</Text>
+                      </View>
+                    </View>
+                  );
+                }
+                const isWeekend = isWeekendDateString(key);
+                if (isWeekend) {
+                  return <Text style={styles.calDetailEmpty}>Hari libur akhir pekan (Sabtu/Minggu).</Text>;
+                }
                 return <Text style={styles.calDetailEmpty}>Tidak ada absen di tanggal ini.</Text>;
               }
               return dayLogs.map(renderLogRow);
@@ -806,15 +1109,180 @@ export const AttendanceHub: React.FC<AttendanceHubProps> = ({
     </ScrollView>
   );
 
-  const renderIzinTab = () => (
-    <View style={{ flex: 1 }}>
-      <LeaveRequestForm
-        onSubmit={handleLeaveFormSubmit}
-        onBack={() => setActiveTab('presensi')}
-        loading={submitting}
-      />
-    </View>
-  );
+  const renderIzinTab = () => {
+    if (leaveViewMode === 'create') {
+      return (
+        <View style={{ flex: 1 }}>
+          <LeaveRequestForm
+            onSubmit={async (data) => {
+              await handleLeaveFormSubmit(data);
+              setLeaveViewMode('list');
+            }}
+            onBack={() => setLeaveViewMode('list')}
+            loading={submitting}
+          />
+        </View>
+      );
+    }
+
+    return (
+      <ScrollView
+        showsVerticalScrollIndicator={false}
+        contentContainerStyle={styles.scroll}
+      >
+        <View style={styles.tabHeaderRow}>
+          <View style={{ flex: 1, marginRight: 8 }}>
+            <Text style={styles.greeting}>Pengajuan Izin & Sakit</Text>
+            <Text style={styles.date}>Pantau status persetujuan surat izin/sakit dari admin cabang</Text>
+          </View>
+          <TouchableOpacity
+            activeOpacity={0.8}
+            onPress={() => {
+              select();
+              setLeaveViewMode('create');
+            }}
+            style={styles.newLeaveBtn}
+          >
+            <Feather name="plus" size={16} color="#FFFFFF" style={{ marginRight: 4 }} />
+            <Text style={styles.newLeaveBtnText}>Ajukan Baru</Text>
+          </TouchableOpacity>
+        </View>
+
+        {userLeaves.length === 0 ? (
+          <View style={[styles.emptyLeaveCard, neoShadow.sm]}>
+            <View style={styles.emptyLeaveIconWrap}>
+              <Feather name="file-text" size={32} color={colors.primary} />
+            </View>
+            <Text style={styles.emptyLeaveTitle}>Belum Ada Pengajuan Izin</Text>
+            <Text style={styles.emptyLeaveSub}>
+              Jika Anda berhalangan hadir karena sakit atau ada keperluan mendesak, ajukan surat izin/sakit di sini.
+            </Text>
+            <TouchableOpacity
+              activeOpacity={0.85}
+              onPress={() => {
+                select();
+                setLeaveViewMode('create');
+              }}
+              style={styles.emptyActionBtn}
+            >
+              <Feather name="plus" size={16} color="#FFFFFF" style={{ marginRight: 6 }} />
+              <Text style={styles.emptyActionBtnText}>Buat Pengajuan Sekarang</Text>
+            </TouchableOpacity>
+          </View>
+        ) : (
+          <View style={{ gap: 12 }}>
+            {userLeaves.map((item) => {
+              const isSakit = item.status === 'sakit';
+              const isApproved = item.approvalStatus === 'approved';
+              const isRejected = item.approvalStatus === 'rejected';
+              const isPending = item.approvalStatus === 'pending';
+
+              const badgeBg = isApproved
+                ? colors.successSoft
+                : isRejected
+                ? colors.dangerSoft
+                : colors.pulangSoft;
+
+              const badgeText = isApproved
+                ? colors.successInk
+                : isRejected
+                ? colors.danger
+                : colors.pulang;
+
+              const statusLabel = isApproved
+                ? 'Disetujui Admin'
+                : isRejected
+                ? 'Ditolak'
+                : 'Menunggu Persetujuan';
+
+              return (
+                <View key={item.id} style={[styles.leaveHistoryCard, neoShadow.sm]}>
+                  <View style={styles.leaveHistoryTop}>
+                    <View style={{ flexDirection: 'row', alignItems: 'center', gap: 8, flex: 1 }}>
+                      <View style={[
+                        styles.leaveHistoryIconWrap,
+                        { backgroundColor: isSakit ? colors.izinSoft : colors.primarySoft }
+                      ]}>
+                        <Feather
+                          name={isSakit ? 'activity' : 'calendar'}
+                          size={18}
+                          color={isSakit ? colors.izin : colors.primary}
+                        />
+                      </View>
+                      <View>
+                        <Text style={styles.leaveHistoryTitle}>
+                          {isSakit ? 'Surat Sakit' : 'Pengajuan Izin'}
+                        </Text>
+                        <Text style={styles.leaveHistoryDates}>
+                          {item.startDate || item.date} s.d. {item.endDate || item.date}
+                        </Text>
+                      </View>
+                    </View>
+                    <View style={[styles.leaveStatusPill, { backgroundColor: badgeBg }]}>
+                      <Feather
+                        name={isApproved ? 'check-circle' : isRejected ? 'x-circle' : 'clock'}
+                        size={12}
+                        color={badgeText}
+                        style={{ marginRight: 4 }}
+                      />
+                      <Text style={[styles.leaveStatusPillText, { color: badgeText }]}>
+                        {statusLabel}
+                      </Text>
+                    </View>
+                  </View>
+
+                  {item.reason ? (
+                    <View style={styles.leaveReasonBox}>
+                      <Text style={styles.leaveReasonLabel}>Keterangan Alasan:</Text>
+                      <Text style={styles.leaveReasonContent}>"{item.reason}"</Text>
+                    </View>
+                  ) : null}
+
+                  {item.reviewNote ? (
+                    <View style={styles.leaveAdminNoteBox}>
+                      <Text style={styles.leaveAdminNoteLabel}>Catatan dari Admin Cabang:</Text>
+                      <Text style={styles.leaveAdminNoteContent}>"{item.reviewNote}"</Text>
+                    </View>
+                  ) : null}
+
+                  {(item.documentUrl || item.photoUrl) ? (
+                    <View style={styles.leaveAttachmentRow}>
+                      {item.documentUrl ? (
+                        <TouchableOpacity
+                          style={styles.attachmentChip}
+                          onPress={() => setSelectedLog(item)}
+                          activeOpacity={0.7}
+                        >
+                          <Feather name="paperclip" size={13} color={colors.primaryDark} style={{ marginRight: 4 }} />
+                          <Text style={styles.attachmentChipText}>Dokumen Surat</Text>
+                        </TouchableOpacity>
+                      ) : null}
+                      {item.photoUrl ? (
+                        <TouchableOpacity
+                          style={styles.attachmentChip}
+                          onPress={() => setSelectedLog(item)}
+                          activeOpacity={0.7}
+                        >
+                          <Feather name="image" size={13} color={colors.primaryDark} style={{ marginRight: 4 }} />
+                          <Text style={styles.attachmentChipText}>Foto Bukti</Text>
+                        </TouchableOpacity>
+                      ) : null}
+                    </View>
+                  ) : null}
+
+                  <View style={styles.leaveCardFooter}>
+                    <Text style={styles.leaveCardFooterText}>
+                      Diajukan: {formatLogDate(item.createdAt || item.clockInTime)} • {formatLogTime(item.createdAt || item.clockInTime)} WIB
+                    </Text>
+                  </View>
+                </View>
+              );
+            })}
+          </View>
+        )}
+      </ScrollView>
+    );
+  };
 
   const renderProfilTab = () => (
     <View style={{ flex: 1 }}>
@@ -845,6 +1313,23 @@ export const AttendanceHub: React.FC<AttendanceHubProps> = ({
         }}
         onConfirmPhoto={handleConfirmPhotoSubmit}
         attendanceTypeLabel={`${mode === 'masuk' ? 'Masuk' : 'Pulang'} (${place === 'kantor' ? nearestOffice.officeName : 'Rumah'})`}
+        metadata={{
+          userName: user.fullName,
+          department: user.department || 'Operasional',
+          companyName: 'E-Presensi SKMI',
+          sessionLabel: mode === 'masuk' ? 'PRESENSI MASUK' : 'PRESENSI PULANG',
+          statusLabel: mode === 'masuk' ? (isLateCheckIn ? 'Terlambat' : 'Tepat Waktu') : 'Selesai',
+          officeName: place === 'kantor' ? nearestOffice.officeName : 'Kerja Dari Rumah (WFH)',
+          distanceText:
+            place === 'kantor'
+              ? currentDistance !== null
+                ? `${formatDistance(currentDistance)} (${isWithinRadius ? 'Sah' : 'Di Luar Radius'})`
+                : 'Jarak Terdeteksi'
+              : 'Mode WFH',
+          latitude: currentCoords.latitude,
+          longitude: currentCoords.longitude,
+          deviceModel: user.deviceModel,
+        }}
       />
 
       <ConfirmDialog
@@ -974,6 +1459,27 @@ const styles = StyleSheet.create({
   },
   tabHeader: {
     marginBottom: spacing.md,
+  },
+  tabHeaderRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'space-between',
+    marginBottom: spacing.md,
+  },
+  printSlipBtn: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    backgroundColor: colors.surface,
+    borderWidth: 1,
+    borderColor: colors.borderStrong,
+    borderRadius: radius.md,
+    paddingHorizontal: 12,
+    paddingVertical: 8,
+  },
+  printSlipText: {
+    fontSize: 12,
+    fontWeight: '700',
+    color: colors.primaryDark,
   },
   statusCard: {
     backgroundColor: colors.surface,
@@ -1337,6 +1843,29 @@ const styles = StyleSheet.create({
     fontWeight: '600',
     paddingVertical: 8,
   },
+  holidayBannerBox: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    backgroundColor: colors.izinSoft,
+    borderWidth: 1,
+    borderColor: colors.izinBorder,
+    borderRadius: radius.md,
+    padding: 12,
+    marginVertical: 6,
+  },
+  holidayBannerTitle: {
+    fontSize: 12,
+    fontWeight: '700',
+    color: colors.dangerInk,
+    textTransform: 'uppercase',
+    letterSpacing: 0.3,
+  },
+  holidayBannerSub: {
+    fontSize: 13,
+    fontWeight: '600',
+    color: colors.ink,
+    marginTop: 2,
+  },
   modalHeaderRow: {
     flexDirection: 'row',
     alignItems: 'center',
@@ -1387,14 +1916,14 @@ const styles = StyleSheet.create({
   masthead: {
     backgroundColor: colors.surface,
     borderRadius: radius.xl,
-    padding: 18,
+    padding: 16,
     borderWidth: 1,
     borderColor: colors.border,
     marginBottom: spacing.md,
   },
   mastheadTopRow: {
     flexDirection: 'row',
-    alignItems: 'flex-start',
+    alignItems: 'center',
     justifyContent: 'space-between',
   },
   employeeInfo: {
@@ -1402,7 +1931,7 @@ const styles = StyleSheet.create({
     marginRight: 12,
   },
   greetingText: {
-    fontSize: 12,
+    fontSize: 13,
     color: colors.muted,
     fontWeight: '500',
   },
@@ -1414,31 +1943,35 @@ const styles = StyleSheet.create({
     marginTop: 1,
   },
   employeeMeta: {
-    fontSize: 12,
-    color: colors.muted,
-    marginTop: 3,
-    fontWeight: '500',
-  },
-  clockTelemetry: {
-    alignItems: 'flex-end',
-  },
-  clockDigits: {
-    fontSize: 24,
-    fontWeight: '700',
-    color: colors.ink,
-    fontVariant: ['tabular-nums'],
-    letterSpacing: -0.5,
-  },
-  clockDateText: {
-    fontSize: 11,
+    fontSize: 13,
     color: colors.muted,
     marginTop: 2,
     fontWeight: '500',
   },
+  dateBadge: {
+    backgroundColor: colors.surfaceSoft,
+    borderRadius: radius.md,
+    paddingVertical: 6,
+    paddingHorizontal: 10,
+    alignItems: 'flex-end',
+    borderWidth: 1,
+    borderColor: colors.borderMuted,
+  },
+  dateBadgeDay: {
+    fontSize: 12,
+    fontWeight: '600',
+    color: colors.ink,
+  },
+  dateBadgeTime: {
+    fontSize: 13,
+    fontWeight: '700',
+    color: colors.primaryDark,
+    marginTop: 1,
+  },
   mastheadDivider: {
     height: 1,
     backgroundColor: colors.borderMuted,
-    marginVertical: 14,
+    marginVertical: 12,
   },
   mastheadBottomRow: {
     flexDirection: 'row',
@@ -1507,83 +2040,99 @@ const styles = StyleSheet.create({
     fontWeight: '500',
   },
 
-  // Hallmark Unified Attendance Console
+  // Konsol Presensi
   consoleCard: {
     backgroundColor: colors.surface,
-    borderRadius: radius.lg,
+    borderRadius: radius.xl,
     borderWidth: 1,
     borderColor: colors.border,
     padding: spacing.md,
     marginBottom: spacing.lg,
   },
+  stepTitle: {
+    fontSize: 13,
+    fontWeight: '700',
+    color: colors.ink,
+    marginBottom: 8,
+  },
+  sessionSection: {
+    marginBottom: 14,
+  },
   segmentedConsole: {
     flexDirection: 'row',
-    backgroundColor: colors.surfaceSoft,
-    borderRadius: radius.md,
-    padding: 3,
-    marginBottom: 12,
+    gap: 10,
   },
   segmentBtn: {
     flex: 1,
-    paddingVertical: 8,
+    paddingVertical: 12,
+    paddingHorizontal: 8,
     alignItems: 'center',
     justifyContent: 'center',
-    borderRadius: radius.sm,
-  },
-  segmentBtnActive: {
-    backgroundColor: colors.surface,
-    borderWidth: 1,
+    borderRadius: radius.md,
+    backgroundColor: colors.surfaceSoft,
+    borderWidth: 1.5,
     borderColor: colors.border,
+    minHeight: 64,
+  },
+  segmentBtnActiveMasuk: {
+    backgroundColor: colors.masukSoft,
+    borderColor: colors.masukBorder,
+  },
+  segmentBtnActivePulang: {
+    backgroundColor: colors.pulangSoft,
+    borderColor: colors.pulangBorder,
   },
   segmentBtnLocked: {
-    opacity: 0.6,
+    opacity: 0.55,
   },
   segmentText: {
-    fontSize: 12,
+    fontSize: 13,
     fontWeight: '600',
     color: colors.muted,
   },
-  segmentTextActive: {
-    color: colors.ink,
+  segmentTextActiveMasuk: {
+    color: colors.primaryDark,
+    fontWeight: '700',
+  },
+  segmentTextActivePulang: {
+    color: colors.secondaryDark,
     fontWeight: '700',
   },
   segmentSub: {
-    fontSize: 10,
-    color: colors.faint,
-    marginTop: 1,
+    fontSize: 11,
+    color: colors.muted,
+    marginTop: 2,
+    fontWeight: '500',
+  },
+  locationSection: {
+    marginBottom: 8,
   },
   locationToggleRow: {
     flexDirection: 'row',
     alignItems: 'center',
     justifyContent: 'space-between',
-    paddingVertical: 4,
     marginBottom: 10,
-  },
-  locationSectionLabel: {
-    fontSize: 12,
-    fontWeight: '700',
-    color: colors.ink,
   },
   locationPillSwitch: {
     flexDirection: 'row',
     backgroundColor: colors.surfaceSoft,
-    borderRadius: radius.sm,
-    padding: 2,
+    borderRadius: radius.md,
+    padding: 3,
     borderWidth: 1,
     borderColor: colors.border,
   },
   locationPillBtn: {
     flexDirection: 'row',
     alignItems: 'center',
-    paddingHorizontal: 10,
-    paddingVertical: 4,
+    paddingHorizontal: 12,
+    paddingVertical: 6,
     borderRadius: radius.sm,
   },
   locationPillActive: {
     backgroundColor: colors.primary,
   },
   locationPillText: {
-    fontSize: 11,
+    fontSize: 12,
     fontWeight: '600',
     color: colors.muted,
   },
@@ -1620,56 +2169,69 @@ const styles = StyleSheet.create({
     borderColor: colors.danger,
   },
   mapContainer: {
-    borderRadius: radius.md,
+    borderRadius: radius.lg,
     overflow: 'hidden',
     borderWidth: 1,
     borderColor: colors.border,
-    marginBottom: 8,
+    marginBottom: 10,
   },
-  radarTelemetryBar: {
+  locationStatusBar: {
     flexDirection: 'row',
     alignItems: 'center',
     justifyContent: 'space-between',
     backgroundColor: colors.surfaceSoft,
     borderRadius: radius.md,
-    paddingHorizontal: 10,
-    paddingVertical: 8,
+    paddingHorizontal: 12,
+    paddingVertical: 10,
     borderWidth: 1,
     borderColor: colors.border,
   },
-  radarIndicatorDot: {
-    width: 7,
-    height: 7,
-    borderRadius: 3.5,
-    marginRight: 6,
-  },
-  radarStatusText: {
-    fontSize: 11,
-    fontWeight: '600',
-    color: colors.ink,
+  locationStatusLeft: {
+    flexDirection: 'row',
+    alignItems: 'center',
     flex: 1,
+    marginRight: 10,
   },
-  radarRefreshBtn: {
+  statusIndicatorDot: {
+    width: 8,
+    height: 8,
+    borderRadius: 4,
+    marginRight: 8,
+  },
+  locationStatusTitle: {
+    fontSize: 13,
+    fontWeight: '700',
+    color: colors.ink,
+  },
+  locationStatusSub: {
+    fontSize: 11,
+    color: colors.muted,
+    marginTop: 1,
+    fontWeight: '500',
+  },
+  refreshLocationBtn: {
     flexDirection: 'row',
     alignItems: 'center',
     gap: 4,
-    paddingLeft: 8,
-    paddingVertical: 2,
-    paddingHorizontal: 6,
-    borderRadius: radius.xs,
+    paddingVertical: 4,
+    paddingHorizontal: 8,
+    borderRadius: radius.sm,
+    backgroundColor: colors.surface,
+    borderWidth: 1,
+    borderColor: colors.border,
   },
-  radarRefreshText: {
-    fontSize: 11,
-    fontWeight: '700',
-    color: colors.primary,
+  refreshLocationText: {
+    fontSize: 12,
+    fontWeight: '600',
+    color: colors.primaryDark,
   },
   consoleActionBtn: {
-    marginTop: 12,
+    marginTop: 14,
     minHeight: 52,
     borderRadius: radius.md,
   },
 
-  // Ledger / Riwayat List
+  // Riwayat List
   ledgerContainer: {
     marginBottom: 32,
   },
@@ -1677,20 +2239,19 @@ const styles = StyleSheet.create({
     flexDirection: 'row',
     alignItems: 'center',
     justifyContent: 'space-between',
-    marginBottom: 8,
+    marginBottom: 10,
     paddingHorizontal: 2,
   },
   ledgerSectionTitle: {
-    fontSize: 12,
+    fontSize: 15,
     fontWeight: '700',
-    color: colors.muted,
-    textTransform: 'uppercase',
-    letterSpacing: 0.6,
+    color: colors.ink,
+    letterSpacing: -0.2,
   },
   ledgerCount: {
-    fontSize: 11,
-    fontWeight: '600',
-    color: colors.faint,
+    fontSize: 12,
+    fontWeight: '500',
+    color: colors.muted,
   },
   ledgerCard: {
     backgroundColor: colors.surface,
@@ -1699,5 +2260,228 @@ const styles = StyleSheet.create({
     borderColor: colors.border,
     paddingHorizontal: spacing.md,
     paddingVertical: 2,
+  },
+  todayLeaveBanner: {
+    backgroundColor: colors.surface,
+    borderWidth: 1,
+    borderColor: colors.border,
+    borderRadius: radius.lg,
+    padding: 14,
+    marginBottom: 14,
+  },
+  todayLeaveTopRow: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    alignItems: 'center',
+    marginBottom: 6,
+  },
+  leaveCategoryIconWrap: {
+    width: 28,
+    height: 28,
+    borderRadius: 7,
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  todayLeaveTitle: {
+    fontSize: fontSize.xs,
+    fontWeight: '700',
+    color: colors.ink,
+  },
+  todayLeaveSub: {
+    fontSize: 11,
+    color: colors.muted,
+  },
+  leaveApprovalBadge: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    paddingHorizontal: 8,
+    paddingVertical: 3,
+    borderRadius: 6,
+  },
+  leaveApprovalBadgeText: {
+    fontSize: 10,
+    fontWeight: '800',
+  },
+  todayLeaveReasonText: {
+    fontSize: fontSize.xs,
+    color: colors.ink,
+    fontStyle: 'italic',
+    marginTop: 4,
+    lineHeight: 18,
+  },
+  todayLeaveNoteBox: {
+    backgroundColor: colors.surfaceSoft,
+    padding: 8,
+    borderRadius: 6,
+    marginTop: 6,
+  },
+  todayLeaveNoteText: {
+    fontSize: 11,
+    color: colors.muted,
+    fontWeight: '600',
+  },
+  newLeaveBtn: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    backgroundColor: colors.primary,
+    paddingHorizontal: 12,
+    paddingVertical: 8,
+    borderRadius: radius.md,
+  },
+  newLeaveBtnText: {
+    fontSize: fontSize.xs,
+    fontWeight: '700',
+    color: '#FFFFFF',
+  },
+  emptyLeaveCard: {
+    backgroundColor: colors.surface,
+    borderWidth: 1,
+    borderColor: colors.border,
+    borderRadius: radius.lg,
+    padding: 24,
+    alignItems: 'center',
+    justifyContent: 'center',
+    marginTop: 10,
+  },
+  emptyLeaveIconWrap: {
+    width: 56,
+    height: 56,
+    borderRadius: 28,
+    backgroundColor: colors.primarySoft,
+    alignItems: 'center',
+    justifyContent: 'center',
+    marginBottom: 12,
+  },
+  emptyLeaveTitle: {
+    fontSize: fontSize.md,
+    fontWeight: '700',
+    color: colors.ink,
+  },
+  emptyLeaveSub: {
+    fontSize: fontSize.xs,
+    color: colors.muted,
+    textAlign: 'center',
+    marginTop: 4,
+    marginBottom: 16,
+    lineHeight: 18,
+  },
+  emptyActionBtn: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    backgroundColor: colors.primary,
+    paddingHorizontal: 16,
+    paddingVertical: 10,
+    borderRadius: radius.md,
+  },
+  emptyActionBtnText: {
+    fontSize: fontSize.xs,
+    fontWeight: '700',
+    color: '#FFFFFF',
+  },
+  leaveHistoryCard: {
+    backgroundColor: colors.surface,
+    borderWidth: 1,
+    borderColor: colors.border,
+    borderRadius: radius.lg,
+    padding: 16,
+  },
+  leaveHistoryTop: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    alignItems: 'flex-start',
+    marginBottom: 10,
+  },
+  leaveHistoryIconWrap: {
+    width: 36,
+    height: 36,
+    borderRadius: 10,
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  leaveHistoryTitle: {
+    fontSize: fontSize.sm,
+    fontWeight: '700',
+    color: colors.ink,
+  },
+  leaveHistoryDates: {
+    fontSize: 11,
+    color: colors.muted,
+    marginTop: 2,
+    fontWeight: '500',
+  },
+  leaveStatusPill: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    paddingHorizontal: 8,
+    paddingVertical: 4,
+    borderRadius: 6,
+  },
+  leaveStatusPillText: {
+    fontSize: 11,
+    fontWeight: '800',
+  },
+  leaveReasonBox: {
+    backgroundColor: colors.surfaceSoft,
+    padding: 10,
+    borderRadius: radius.sm,
+    marginBottom: 8,
+  },
+  leaveReasonLabel: {
+    fontSize: 10,
+    color: colors.muted,
+    fontWeight: '700',
+    textTransform: 'uppercase',
+  },
+  leaveReasonContent: {
+    fontSize: fontSize.xs,
+    color: colors.ink,
+    marginTop: 2,
+    lineHeight: 18,
+  },
+  leaveAdminNoteBox: {
+    backgroundColor: colors.dangerSoft,
+    padding: 10,
+    borderRadius: radius.sm,
+    marginBottom: 8,
+  },
+  leaveAdminNoteLabel: {
+    fontSize: 10,
+    color: colors.danger,
+    fontWeight: '700',
+    textTransform: 'uppercase',
+  },
+  leaveAdminNoteContent: {
+    fontSize: fontSize.xs,
+    color: colors.danger,
+    marginTop: 2,
+    lineHeight: 18,
+  },
+  leaveAttachmentRow: {
+    flexDirection: 'row',
+    gap: 8,
+    marginBottom: 8,
+  },
+  attachmentChip: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    backgroundColor: colors.primarySoft,
+    paddingHorizontal: 10,
+    paddingVertical: 6,
+    borderRadius: radius.sm,
+  },
+  attachmentChipText: {
+    fontSize: 11,
+    fontWeight: '600',
+    color: colors.primaryDark,
+  },
+  leaveCardFooter: {
+    borderTopWidth: 1,
+    borderTopColor: colors.border,
+    paddingTop: 8,
+    marginTop: 4,
+  },
+  leaveCardFooterText: {
+    fontSize: 10,
+    color: colors.muted,
   },
 });

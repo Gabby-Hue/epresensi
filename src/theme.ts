@@ -87,8 +87,8 @@ export const radius = {
 } as const;
 
 export const touch = {
-  buttonMinHeight: 46,
-  inputMinHeight: 46,
+  buttonMinHeight: 48,
+  inputMinHeight: 48,
 } as const;
 
 // Clean modern ambient micro-shadows (Tanpa efek 3D block)

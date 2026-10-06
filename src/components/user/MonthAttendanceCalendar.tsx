@@ -8,6 +8,7 @@ import { Feather } from '@expo/vector-icons';
 import { AttendanceRecord } from '../../types/attendance';
 import { colors, fontSize, radius, spacing } from '../../theme';
 import { select } from '../../services/feedbackService';
+import { isNationalHoliday, getHolidayName } from '../../utils/holidays';
 
 export type DayStatus = 'lengkap' | 'satu_sesi' | 'izin' | 'menunggu' | 'libur' | 'absen' | 'akan_datang' | 'hari_ini_kosong';
 
@@ -59,13 +60,14 @@ export const getDayStatus = (
   info: DayInfo | undefined,
   isPast: boolean,
   isToday: boolean,
-  isWeekend = false
+  isWeekend = false,
+  isHoliday = false
 ): DayStatus => {
   if (info?.hasIzin) return 'izin';
   if (info?.hasMasuk && info?.hasPulang) return 'lengkap';
   if (info?.hasMasuk || info?.hasPulang) return 'satu_sesi';
   if (info?.hasPending) return 'menunggu';
-  if (!info && isWeekend) return 'libur';
+  if (!info && (isWeekend || isHoliday)) return 'libur';
   if (isToday) return 'hari_ini_kosong';
   if (isPast) return 'absen';
   return 'akan_datang';
@@ -154,7 +156,9 @@ export const MonthAttendanceCalendar: React.FC<MonthAttendanceCalendarProps> = (
       const isToday = isCurrentMonth && d === todayDate;
       const weekday = new Date(year, month, d).getDay();
       const isWeekend = weekday === 0 || weekday === 6;
-      const st = getDayStatus(info, isPast, isToday, isWeekend);
+      const dateKey = `${year}-${String(month + 1).padStart(2, '0')}-${String(d).padStart(2, '0')}`;
+      const isHoliday = isNationalHoliday(dateKey);
+      const st = getDayStatus(info, isPast, isToday, isWeekend, isHoliday);
       if (st === 'lengkap') hadir++;
       else if (st === 'satu_sesi') satuSesi++;
       else if (st === 'izin') izin++;
@@ -165,32 +169,34 @@ export const MonthAttendanceCalendar: React.FC<MonthAttendanceCalendarProps> = (
 
   // Skema warna asli E-Presensi:
   // alpa = abu-abu solid, 1 sesi = kuning solid, lengkap = biru solid,
-  // izin = merah hollow (putih + border merah), Sabtu-Minggu kosong = merah solid
+  // izin = merah hollow (putih + border merah), Sabtu-Minggu / Libur Nasional kosong = merah solid
   const getDayColors = (day: number) => {
     const info = attendanceMap[day];
     const isPast = isPastMonth || (isCurrentMonth && day < todayDate);
     const isToday = isCurrentMonth && day === todayDate;
     const weekday = new Date(year, month, day).getDay();
     const isWeekend = weekday === 0 || weekday === 6;
-    const status = getDayStatus(info, isPast, isToday, isWeekend);
+    const dateKey = `${year}-${String(month + 1).padStart(2, '0')}-${String(day).padStart(2, '0')}`;
+    const isHoliday = isNationalHoliday(dateKey);
+    const status = getDayStatus(info, isPast, isToday, isWeekend, isHoliday);
 
     switch (status) {
       case 'izin':
-        return { bg: '#FFFFFF', text: colors.izin, border: colors.izin, isToday };
+        return { bg: '#FFFFFF', text: colors.izin, border: colors.izin, isToday, isHoliday };
       case 'menunggu':
-        return { bg: '#FFFFFF', text: '#B45309', border: '#F59E0B', isToday };
+        return { bg: '#FFFFFF', text: '#B45309', border: '#F59E0B', isToday, isHoliday };
       case 'libur':
-        return { bg: colors.izin, text: '#FFFFFF', isToday };
+        return { bg: colors.izin, text: '#FFFFFF', isToday, isHoliday };
       case 'lengkap':
-        return { bg: colors.primary, text: '#FFFFFF', isToday };
+        return { bg: colors.primary, text: '#FFFFFF', isToday, isHoliday };
       case 'satu_sesi':
-        return { bg: '#F59E0B', text: '#FFFFFF', isToday };
+        return { bg: '#F59E0B', text: '#FFFFFF', isToday, isHoliday };
       case 'absen':
-        return { bg: '#64748B', text: '#FFFFFF', isToday };
+        return { bg: '#64748B', text: '#FFFFFF', isToday, isHoliday };
       case 'hari_ini_kosong':
-        return { bg: '#FFFFFF', text: colors.primary, border: colors.primary, isToday };
+        return { bg: '#FFFFFF', text: colors.primary, border: colors.primary, isToday, isHoliday };
       default:
-        return { bg: '#E8F0FE', text: '#64748B', isToday: false };
+        return { bg: '#E8F0FE', text: '#64748B', isToday: false, isHoliday };
     }
   };
 

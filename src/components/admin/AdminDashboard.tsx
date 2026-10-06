@@ -1,4 +1,4 @@
-import React, { useState } from 'react';
+import React, { useEffect, useState } from 'react';
 import {
   Alert,
   Image,
@@ -11,7 +11,7 @@ import {
   useWindowDimensions,
 } from 'react-native';
 import { AttendanceService } from '../../services/attendanceService';
-import { AttendanceRecord, OfficeSettings, UserProfile } from '../../types/attendance';
+import { AttendanceRecord, AuditLog, OfficeSettings, UserProfile } from '../../types/attendance';
 import { Card } from '../ui/Card';
 import { Badge } from '../ui/Badge';
 import { GeofenceSettings } from './GeofenceSettings';
@@ -41,25 +41,22 @@ interface AdminDashboardProps {
   onPressProfile?: () => void;
 }
 
-type TabKey = 'monitoring' | 'report' | 'geofence' | 'employees' | 'approval' | 'companies';
+type TabKey = 'companies' | 'monitoring' | 'report' | 'geofence' | 'employees' | 'approval';
 
-const TABS: Array<{ key: TabKey; label: string; icon: keyof typeof Feather.glyphMap; superOnly?: boolean }> = [
+const TABS: Array<{
+  key: TabKey;
+  label: string;
+  icon: keyof typeof Feather.glyphMap;
+  superOnly?: boolean;
+  branchOnly?: boolean;
+}> = [
+  { key: 'companies', label: 'PT & Admin Cabang', icon: 'briefcase', superOnly: true },
   { key: 'monitoring', label: 'Monitoring', icon: 'pie-chart' },
-  { key: 'report', label: 'Laporan', icon: 'bar-chart-2' },
-  { key: 'geofence', label: 'Titik & Radius', icon: 'map' },
-  { key: 'employees', label: 'Kelola Karyawan', icon: 'user-plus' },
-  { key: 'approval', label: 'Persetujuan', icon: 'inbox' },
-  { key: 'companies', label: 'PT & Admin', icon: 'briefcase', superOnly: true },
+  { key: 'report', label: 'Laporan', icon: 'bar-chart-2', branchOnly: true },
+  { key: 'geofence', label: 'Titik & Radius', icon: 'map', branchOnly: true },
+  { key: 'employees', label: 'Kelola Karyawan', icon: 'user-plus', branchOnly: true },
+  { key: 'approval', label: 'Persetujuan', icon: 'inbox', branchOnly: true },
 ];
-
-const PAGE_META: Record<TabKey, { title: string; sub: string }> = {
-  monitoring: { title: 'Monitoring Kehadiran', sub: 'Pantau absen karyawan hari ini' },
-  report: { title: 'Laporan Departemen', sub: 'Bandingkan kehadiran Sales, IT, dan Drafter' },
-  geofence: { title: 'Titik & Radius', sub: 'Kelola lokasi dan radius absen kantor' },
-  employees: { title: 'Kelola Karyawan', sub: 'Akun dan perangkat karyawan' },
-  approval: { title: 'Persetujuan Izin', sub: 'Pengajuan yang menunggu keputusan' },
-  companies: { title: 'PT & Admin Cabang', sub: 'Kelola perusahaan dan admin tiap PT' },
-};
 
 export const AdminDashboard: React.FC<AdminDashboardProps> = ({
   currentAdmin,
@@ -74,13 +71,24 @@ export const AdminDashboard: React.FC<AdminDashboardProps> = ({
   onLogout,
   onPressProfile,
 }) => {
-  const [activeTab, setActiveTab] = useState<TabKey>('monitoring');
+  const isSuper = currentAdmin.role === 'superadmin';
+  const [activeTab, setActiveTab] = useState<TabKey>(isSuper ? 'companies' : 'monitoring');
+  const [companiesList, setCompaniesList] = useState<{ id: string; name: string }[]>([]);
+  const [auditLogs, setAuditLogs] = useState<AuditLog[]>([]);
   const [selectedRecord, setSelectedRecord] = useState<AttendanceRecord | null>(null);
   const [recapEmployee, setRecapEmployee] = useState<UserProfile | null>(null);
   const [reviewing, setReviewing] = useState(false);
   const [showLogoutDialog, setShowLogoutDialog] = useState(false);
   const { width } = useWindowDimensions();
   const isWide = width >= 768;
+
+  // Load companies & audit logs for superadmin overview
+  useEffect(() => {
+    if (isSuper) {
+      AttendanceService.getCompanies().then((res) => setCompaniesList(res));
+      AttendanceService.getAuditLogs().then((res) => setAuditLogs(res));
+    }
+  }, [isSuper, users]);
 
   const employees = users.filter((u) => u.role === 'employee');
 
@@ -123,7 +131,29 @@ export const AdminDashboard: React.FC<AdminDashboardProps> = ({
     onRefreshUsers();
   };
 
-  const visibleTabs = TABS.filter((t) => !t.superOnly || currentAdmin.role === 'superadmin');
+  // Superadmin HANYA melihat menu PT & Admin dan Monitoring Cabang (Pusat)
+  // Admin Branch HANYA melihat menu operasional cabang
+  const visibleTabs = TABS.filter((t) => {
+    if (isSuper) {
+      return t.superOnly || (t.key === 'monitoring' && !t.branchOnly);
+    } else {
+      return !t.superOnly;
+    }
+  });
+
+  const PAGE_META: Record<TabKey, { title: string; sub: string }> = {
+    companies: {
+      title: 'PT & Admin Cabang',
+      sub: 'Pusat: Kelola perusahaan dan akun admin penanggung jawab tiap cabang',
+    },
+    monitoring: isSuper
+      ? { title: 'Monitoring Seluruh Cabang', sub: 'Executive Overview: Pantau kesehatan presensi & admin seluruh PT' }
+      : { title: 'Monitoring Kehadiran', sub: 'Pantau absen karyawan cabang hari ini' },
+    report: { title: 'Laporan Departemen', sub: 'Bandingkan kehadiran departemen cabang' },
+    geofence: { title: 'Titik & Radius', sub: 'Kelola lokasi dan radius absen kantor cabang' },
+    employees: { title: 'Kelola Karyawan', sub: 'Akun dan perangkat karyawan cabang' },
+    approval: { title: 'Persetujuan Izin', sub: 'Pengajuan yang menunggu keputusan admin cabang' },
+  };
 
   const initials = currentAdmin.fullName
     .split(' ')
@@ -134,7 +164,250 @@ export const AdminDashboard: React.FC<AdminDashboardProps> = ({
 
   const tabContent = (
     <>
-      {activeTab === 'monitoring' && (
+      {/* 1. KONTEN TAB MONITORING */}
+      {activeTab === 'monitoring' && isSuper && (
+        <>
+          {/* Executive Holding Status Banner */}
+          <View style={[styles.statusBanner, neoShadow.md]}>
+            <View style={styles.statusBannerTop}>
+              <View style={styles.statusLiveWrap}>
+                <View style={styles.statusLiveDot} />
+                <Text style={styles.statusLiveText}>SISTEM PUSAT AKTIF</Text>
+              </View>
+              <View style={styles.syncPill}>
+                <Feather name="shield" size={11} color={colors.primaryDark} style={{ marginRight: 5 }} />
+                <Text style={[styles.syncText, { color: colors.primaryDark, fontWeight: '700' }]}>Superadmin Holding</Text>
+              </View>
+            </View>
+            <Text style={styles.statusTitle}>Monitoring Eksekutif Seluruh Cabang</Text>
+            <Text style={styles.statusDate}>
+              Pantau performa kehadiran, admin penanggung jawab, dan kesehatan operasional tiap entitas PT
+            </Text>
+          </View>
+
+          {/* 4 KPI Holding Counters */}
+          <View style={styles.kpiContainer}>
+            <View style={[styles.kpiCard, neoShadow.sm, isWide && styles.kpiCardWide]}>
+              <View style={styles.kpiContent}>
+                <View style={styles.kpiTopRow}>
+                  <View>
+                    <Text style={styles.kpiLabel}>Total PT / Cabang</Text>
+                    <View style={styles.kpiValueRow}>
+                      <Text style={styles.kpiNumber}>{companiesList.length || 1}</Text>
+                      <Text style={styles.kpiSub}>Entitas</Text>
+                    </View>
+                  </View>
+                  <View style={[styles.kpiBadge, { backgroundColor: colors.primarySoft }]}>
+                    <Feather name="briefcase" size={13} color={colors.primary} />
+                  </View>
+                </View>
+              </View>
+            </View>
+
+            <View style={[styles.kpiCard, neoShadow.sm, isWide && styles.kpiCardWide]}>
+              <View style={styles.kpiContent}>
+                <View style={styles.kpiTopRow}>
+                  <View>
+                    <Text style={styles.kpiLabel}>Admin Cabang Bertugas</Text>
+                    <View style={styles.kpiValueRow}>
+                      <Text style={styles.kpiNumber}>
+                        {users.filter((u) => u.role === 'admin').length}
+                      </Text>
+                      <Text style={styles.kpiSub}>Orang</Text>
+                    </View>
+                  </View>
+                  <View style={[styles.kpiBadge, { backgroundColor: colors.primarySoft }]}>
+                    <Feather name="users" size={13} color={colors.primary} />
+                  </View>
+                </View>
+              </View>
+            </View>
+
+            <View style={[styles.kpiCard, neoShadow.sm, isWide && styles.kpiCardWide]}>
+              <View style={styles.kpiContent}>
+                <View style={styles.kpiTopRow}>
+                  <View>
+                    <Text style={styles.kpiLabel}>Total Karyawan Grup</Text>
+                    <View style={styles.kpiValueRow}>
+                      <Text style={styles.kpiNumber}>{totalEmployees}</Text>
+                      <Text style={styles.kpiSub}>Karyawan</Text>
+                    </View>
+                  </View>
+                  <View style={[styles.kpiBadge, { backgroundColor: colors.primarySoft }]}>
+                    <Feather name="user-check" size={13} color={colors.primary} />
+                  </View>
+                </View>
+              </View>
+            </View>
+
+            <View style={[styles.kpiCard, neoShadow.sm, isWide && styles.kpiCardWide]}>
+              <View style={styles.kpiContent}>
+                <View style={styles.kpiTopRow}>
+                  <View>
+                    <Text style={styles.kpiLabel}>Rata-rata Kehadiran Hari Ini</Text>
+                    <View style={styles.kpiValueRow}>
+                      <Text style={styles.kpiNumber}>{presentPct}%</Text>
+                      <Text style={styles.kpiSub}>Nasional</Text>
+                    </View>
+                  </View>
+                  <View style={[styles.kpiBadge, { backgroundColor: colors.primarySoft }]}>
+                    <Feather name="trending-up" size={13} color={colors.primary} />
+                  </View>
+                </View>
+                <View style={styles.kpiTrack}>
+                  <View style={[styles.kpiBar, { width: `${presentPct}%`, backgroundColor: colors.primary }]} />
+                </View>
+              </View>
+            </View>
+          </View>
+
+          {/* Ringkasan Komparasi Tiap PT */}
+          <Card
+            title={`Ringkasan Operasional Tiap Cabang (${companiesList.length || 1})`}
+            subtitle="Admin penanggung jawab dan rekap kehadiran hari ini per entitas PT"
+            icon="server"
+          >
+            {companiesList.length === 0 ? (
+              <Text style={styles.muted}>Belum ada data PT.</Text>
+            ) : (
+              companiesList.map((comp) => {
+                const bStaff = users.filter((u) => (u.companyId ?? '') === comp.id && u.role === 'employee');
+                const bAdmins = users.filter((u) => (u.companyId ?? '') === comp.id && u.role === 'admin');
+                const bStaffIds = new Set(bStaff.map((s) => s.id));
+                const bAtt = todayAttendances.filter((a) => bStaffIds.has(a.userId));
+                const bPresent = bAtt.filter((a) => a.type === 'luring' || a.type === 'daring').length;
+                const bIzin = bAtt.filter((a) => a.type === 'izin_sakit').length;
+                const bTotal = bStaff.length;
+                const bPct = bTotal > 0 ? Math.round((bPresent / bTotal) * 100) : 0;
+                const adminNames = bAdmins.map((a) => a.fullName).join(', ') || 'Belum ada admin ditugaskan';
+
+                return (
+                  <View key={comp.id} style={[styles.branchCard, neoShadow.sm]}>
+                    <View style={styles.branchHeaderRow}>
+                      <View style={{ flex: 1 }}>
+                        <Text style={styles.branchName}>{comp.name}</Text>
+                        <Text style={styles.branchAdminText}>
+                          Penanggung Jawab: <Text style={{ fontWeight: '700', color: colors.ink }}>{adminNames}</Text>
+                        </Text>
+                      </View>
+                      <View style={[styles.kpiBadge, { backgroundColor: colors.primarySoft }]}>
+                        <Text style={[styles.kpiBadgeText, { color: colors.primaryDark }]}>{bPct}% Hadir</Text>
+                      </View>
+                    </View>
+
+                    <View style={styles.branchStatsRow}>
+                      <View style={styles.branchStatItem}>
+                        <Text style={styles.branchStatLabel}>Karyawan</Text>
+                        <Text style={styles.branchStatVal}>{bTotal} orang</Text>
+                      </View>
+                      <View style={styles.branchStatItem}>
+                        <Text style={styles.branchStatLabel}>Hadir</Text>
+                        <Text style={[styles.branchStatVal, { color: colors.primaryDark }]}>{bPresent} orang</Text>
+                      </View>
+                      <View style={styles.branchStatItem}>
+                        <Text style={styles.branchStatLabel}>Izin/Sakit</Text>
+                        <Text style={[styles.branchStatVal, { color: colors.izin }]}>{bIzin} orang</Text>
+                      </View>
+                      <View style={styles.branchStatItem}>
+                        <Text style={styles.branchStatLabel}>Belum Hadir</Text>
+                        <Text style={[styles.branchStatVal, { color: colors.pulang }]}>{bTotal - bPresent - bIzin} orang</Text>
+                      </View>
+                    </View>
+
+                    <View style={styles.kpiTrack}>
+                      <View style={[styles.kpiBar, { width: `${bPct}%`, backgroundColor: colors.primary }]} />
+                    </View>
+
+                    <TouchableOpacity
+                      style={styles.branchManageBtn}
+                      activeOpacity={0.8}
+                      onPress={() => {
+                        select();
+                        setActiveTab('companies');
+                      }}
+                    >
+                      <Feather name="settings" size={13} color={colors.primaryDark} style={{ marginRight: 6 }} />
+                      <Text style={styles.branchManageBtnText}>Kelola PT & Admin Cabang Ini</Text>
+                    </TouchableOpacity>
+                  </View>
+                );
+              })
+            )}
+          </Card>
+
+          {/* Activity Audit Trail: Catatan Log Keaktifan Admin Cabang */}
+          <Card
+            title={`Activity Audit Trail (${auditLogs.length})`}
+            subtitle="Pantau admin cabang yang rajin vs lambat memproses izin & login"
+            icon="activity"
+          >
+            {auditLogs.length === 0 ? (
+              <Text style={styles.muted}>Belum ada riwayat aktivitas tercatat.</Text>
+            ) : (
+              auditLogs.map((log) => {
+                const isApproval = log.action === 'approve_leave';
+                const isReject = log.action === 'reject_leave';
+                const isReset = log.action === 'reset_device';
+                const isLogin = log.action === 'login';
+
+                const iconName: keyof typeof Feather.glyphMap = isApproval
+                  ? 'check-circle'
+                  : isReject
+                  ? 'x-circle'
+                  : isReset
+                  ? 'smartphone'
+                  : isLogin
+                  ? 'log-in'
+                  : 'activity';
+
+                const badgeBg = isApproval
+                  ? colors.successSoft
+                  : isReject
+                  ? colors.dangerSoft
+                  : isReset
+                  ? colors.pulangSoft
+                  : colors.primarySoft;
+
+                const badgeColor = isApproval
+                  ? colors.successInk
+                  : isReject
+                  ? colors.danger
+                  : isReset
+                  ? colors.pulang
+                  : colors.primaryDark;
+
+                const timeStr = new Date(log.createdAt).toLocaleTimeString('id-ID', {
+                  hour: '2-digit',
+                  minute: '2-digit',
+                });
+                const dateStr = new Date(log.createdAt).toLocaleDateString('id-ID', {
+                  day: 'numeric',
+                  month: 'short',
+                });
+
+                return (
+                  <View key={log.id} style={styles.auditRow}>
+                    <View style={[styles.auditIconBox, { backgroundColor: badgeBg }]}>
+                      <Feather name={iconName} size={15} color={badgeColor} />
+                    </View>
+                    <View style={{ flex: 1 }}>
+                      <View style={{ flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center' }}>
+                        <Text style={styles.auditActor}>{log.userName}</Text>
+                        <Text style={styles.auditTime}>{dateStr} • {timeStr} WIB</Text>
+                      </View>
+                      <Text style={styles.auditDesc}>{log.description || log.action}</Text>
+                      <Text style={styles.auditCompany}>{log.companyName ? `PT: ${log.companyName}` : 'Holding'}</Text>
+                    </View>
+                  </View>
+                );
+              })
+            )}
+          </Card>
+        </>
+      )}
+
+      {/* 1B. KONTEN TAB MONITORING CABANG (ADMIN BIASA) */}
+      {activeTab === 'monitoring' && !isSuper && (
         <>
           {/* Live Operational Status Banner */}
           <View style={[styles.statusBanner, neoShadow.md]}>
@@ -229,7 +502,7 @@ export const AdminDashboard: React.FC<AdminDashboardProps> = ({
           {/* Unabsent Employees Warning Banner */}
           <Card
             title={`Belum absen hari ini (${unabsentEmployees.length})`}
-            subtitle="Karyawan yang belum absen — ketuk untuk lihat rekap"
+            subtitle="Karyawan yang belum absen: ketuk untuk lihat rekap"
             icon="alert-circle"
           >
             {unabsentEmployees.length === 0 ? (
@@ -275,9 +548,11 @@ export const AdminDashboard: React.FC<AdminDashboardProps> = ({
         </>
       )}
 
-      {activeTab === 'report' && <AdminDepartmentReport users={users} />}
+      {/* 2. TAB LAPORAN (HANYA ADMIN CABANG) */}
+      {activeTab === 'report' && !isSuper && <AdminDepartmentReport users={users} />}
 
-      {activeTab === 'geofence' && (
+      {/* 3. TAB TITIK & RADIUS GEOFENCE (HANYA ADMIN CABANG) */}
+      {activeTab === 'geofence' && !isSuper && (
         <GeofenceSettings
           offices={officeList.length > 0 ? officeList : [officeSettings]}
           onAdd={async (params) => {
@@ -301,7 +576,8 @@ export const AdminDashboard: React.FC<AdminDashboardProps> = ({
         />
       )}
 
-      {activeTab === 'employees' && (
+      {/* 4. TAB KELOLA KARYAWAN (HANYA ADMIN CABANG) */}
+      {activeTab === 'employees' && !isSuper && (
         <AdminEmployeeManager
           currentAdmin={currentAdmin}
           users={users}
@@ -310,14 +586,16 @@ export const AdminDashboard: React.FC<AdminDashboardProps> = ({
         />
       )}
 
-      {activeTab === 'approval' && (
+      {/* 5. TAB PERSETUJUAN IZIN (HANYA ADMIN CABANG) */}
+      {activeTab === 'approval' && !isSuper && (
         <AdminApprovalQueue
           requests={pendingApprovals}
           onSelect={(rec) => setSelectedRecord(rec)}
         />
       )}
 
-      {activeTab === 'companies' && currentAdmin.role === 'superadmin' && (
+      {/* 6. TAB PT & ADMIN CABANG (HANYA SUPERADMIN) */}
+      {activeTab === 'companies' && isSuper && (
         <AdminCompanyManager
           currentAdmin={currentAdmin}
           users={users}
@@ -896,5 +1174,107 @@ const styles = StyleSheet.create({
     alignItems: 'center',
     justifyContent: 'center',
     zIndex: 40,
+  },
+  branchCard: {
+    backgroundColor: colors.surface,
+    borderWidth: 1,
+    borderColor: colors.border,
+    borderRadius: radius.lg,
+    padding: 16,
+    marginBottom: 12,
+  },
+  branchHeaderRow: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    alignItems: 'flex-start',
+    marginBottom: 12,
+  },
+  branchName: {
+    fontSize: fontSize.md,
+    fontWeight: '800',
+    color: colors.ink,
+  },
+  branchAdminText: {
+    fontSize: fontSize.xs,
+    color: colors.muted,
+    marginTop: 2,
+  },
+  branchStatsRow: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    backgroundColor: colors.surfaceSoft,
+    padding: 12,
+    borderRadius: radius.md,
+    marginBottom: 12,
+  },
+  branchStatItem: {
+    alignItems: 'center',
+  },
+  branchStatLabel: {
+    fontSize: 10,
+    color: colors.muted,
+    fontWeight: '600',
+    textTransform: 'uppercase',
+  },
+  branchStatVal: {
+    fontSize: fontSize.sm,
+    fontWeight: '800',
+    color: colors.ink,
+    marginTop: 2,
+  },
+  branchManageBtn: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'center',
+    paddingVertical: 10,
+    marginTop: 10,
+    borderRadius: radius.md,
+    backgroundColor: colors.primarySoft,
+  },
+  branchManageBtnText: {
+    fontSize: fontSize.xs,
+    fontWeight: '700',
+    color: colors.primaryDark,
+  },
+  muted: {
+    fontSize: fontSize.xs,
+    color: colors.muted,
+  },
+  auditRow: {
+    flexDirection: 'row',
+    alignItems: 'flex-start',
+    gap: 12,
+    paddingVertical: 10,
+    borderBottomWidth: 1,
+    borderBottomColor: colors.border,
+  },
+  auditIconBox: {
+    width: 32,
+    height: 32,
+    borderRadius: 8,
+    alignItems: 'center',
+    justifyContent: 'center',
+    marginTop: 2,
+  },
+  auditActor: {
+    fontSize: fontSize.xs,
+    fontWeight: '700',
+    color: colors.ink,
+  },
+  auditTime: {
+    fontSize: 10,
+    color: colors.muted,
+  },
+  auditDesc: {
+    fontSize: fontSize.xs,
+    color: colors.ink,
+    marginTop: 2,
+    lineHeight: 18,
+  },
+  auditCompany: {
+    fontSize: 10,
+    color: colors.primaryDark,
+    fontWeight: '600',
+    marginTop: 2,
   },
 });

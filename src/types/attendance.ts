@@ -73,3 +73,15 @@ export interface LocationCoords {
   longitude: number;
   accuracy?: number;
 }
+
+export interface AuditLog {
+  id: string;
+  userId: string;
+  userName: string;
+  userRole: string;
+  companyId?: string | null;
+  companyName?: string | null;
+  action: string;
+  description?: string | null;
+  createdAt: string;
+}

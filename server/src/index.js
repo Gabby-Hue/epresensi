@@ -79,6 +79,18 @@ function toMySQLDatetime(v) {
   return `${d.getFullYear()}-${p(d.getMonth() + 1)}-${p(d.getDate())} ${p(d.getHours())}:${p(d.getMinutes())}:${p(d.getSeconds())}`;
 }
 
+// ---- Audit Trail Logger (Log Aktivitas Admin Cabang & Superadmin) ----
+async function logActivity(userId, userName, userRole, companyId, action, description) {
+  try {
+    await pool.query(
+      'INSERT INTO audit_logs (user_id, user_name, user_role, company_id, action, description) VALUES (?,?,?,?,?,?)',
+      [userId, userName || 'User', userRole || 'admin', companyId || null, action, description || null]
+    );
+  } catch (err) {
+    console.error('Audit log error:', err.message);
+  }
+}
+
 // ---- Root & Health ----
 app.get('/', (req, res) => {
   res.json({
@@ -189,6 +201,18 @@ app.post('/auth/login', async (req, res) => {
         row.device_model = deviceModel || null;
         row.device_id = deviceId;
       }
+    } else {
+      // Admin & Superadmin bebas device lock total
+      row.device_model = null;
+      row.device_id = null;
+      void logActivity(
+        row.id,
+        row.full_name,
+        row.role,
+        row.company_id,
+        'login',
+        `Masuk ke sistem (${deviceModel || 'Web Client'})`
+      );
     }
     res.json({ token: signToken(row), user: publicUser(row) });
   } catch (e) {
@@ -241,10 +265,44 @@ app.patch('/companies/:id', authRequired, superOnly, async (req, res) => {
 });
 
 app.delete('/companies/:id', authRequired, superOnly, async (req, res) => {
-  const [[used]] = await pool.query('SELECT COUNT(*) AS n FROM users WHERE company_id=?', [req.params.id]);
-  if (used.n > 0) return res.status(400).json({ error: 'PT masih dipakai akun, pindahkan dulu.' });
-  await pool.query('DELETE FROM companies WHERE id=?', [req.params.id]);
-  res.json({ ok: true });
+  try {
+    const [[targetComp]] = await pool.query('SELECT * FROM companies WHERE id=?', [req.params.id]);
+    if (!targetComp) return res.status(404).json({ error: 'PT tidak ditemukan.' });
+
+    const isForce = String(req.query?.force) === 'true';
+    const [[empCount]] = await pool.query(
+      "SELECT COUNT(*) AS n FROM users WHERE company_id=? AND role='employee'",
+      [req.params.id]
+    );
+
+    if (empCount.n > 0 && !isForce) {
+      return res.status(400).json({
+        error: `PT ${targetComp.name} masih memiliki ${empCount.n} karyawan aktif. Pindahkan karyawan terlebih dahulu sebelum menghapus PT.`,
+      });
+    }
+
+    // Jika force atau karyawan sudah 0:
+    if (empCount.n > 0) {
+      await pool.query('UPDATE users SET company_id=NULL WHERE company_id=? AND role="employee"', [req.params.id]);
+    }
+    await pool.query('DELETE FROM users WHERE company_id=? AND role="admin"', [req.params.id]);
+    await pool.query('DELETE FROM office_settings WHERE company_id=?', [req.params.id]);
+    await pool.query('DELETE FROM companies WHERE id=?', [req.params.id]);
+
+    const [[me]] = await pool.query('SELECT * FROM users WHERE id=?', [req.auth.id]);
+    void logActivity(
+      req.auth.id,
+      me ? me.full_name : 'Superadmin',
+      'superadmin',
+      null,
+      'delete_company',
+      `Menghapus entitas PT: ${targetComp.name} (ID: ${req.params.id})`
+    );
+
+    res.json({ ok: true, message: `PT ${targetComp.name} berhasil dihapus.` });
+  } catch (e) {
+    res.status(500).json({ error: e.message });
+  }
 });
 
 // Helper: PT milik peminta (admin dikunci ke PT-nya, superadmin bebas + filter ?company_id=)
@@ -297,10 +355,19 @@ app.patch('/users/:id', authRequired, async (req, res) => {
     }
   }
 
-  const { fullName, department, phoneNumber, avatarUrl } = req.body || {};
+  const { fullName, department, phoneNumber, avatarUrl, password } = req.body || {};
+  let updatePasswordSql = '';
+  const updateArgs = [fullName || null, department || null, phoneNumber || null, avatarUrl || null];
+  if (password && String(password).length >= 6) {
+    const hash = await hashPassword(password);
+    updatePasswordSql = ', password_hash=?';
+    updateArgs.push(hash);
+  }
+  updateArgs.push(targetId);
+
   await pool.query(
-    'UPDATE users SET full_name=COALESCE(?,full_name), department=COALESCE(?,department), phone_number=COALESCE(?,phone_number), avatar_url=COALESCE(?,avatar_url) WHERE id=?',
-    [fullName || null, department || null, phoneNumber || null, avatarUrl || null, targetId]
+    `UPDATE users SET full_name=COALESCE(?,full_name), department=COALESCE(?,department), phone_number=COALESCE(?,phone_number), avatar_url=COALESCE(?,avatar_url)${updatePasswordSql} WHERE id=?`,
+    updateArgs
   );
   const [[row]] = await pool.query('SELECT * FROM users WHERE id=?', [targetId]);
   res.json({ user: publicUser(row) });
@@ -310,6 +377,15 @@ app.patch('/users/:id', authRequired, async (req, res) => {
 app.patch('/users/:id/reset-device', authRequired, adminOnly, async (req, res) => {
   await pool.query('UPDATE users SET device_model=NULL, device_id=NULL WHERE id=?', [req.params.id]);
   const [[row]] = await pool.query('SELECT * FROM users WHERE id=?', [req.params.id]);
+  const [[me]] = await pool.query('SELECT * FROM users WHERE id=?', [req.auth.id]);
+  void logActivity(
+    req.auth.id,
+    me ? me.full_name : 'Admin',
+    req.auth.role,
+    row ? row.company_id : null,
+    'reset_device',
+    `Mereset kunci perangkat karyawan: ${row ? row.full_name : ''} (${row ? row.email : ''})`
+  );
   res.json({ user: publicUser(row) });
 });
 
@@ -317,8 +393,33 @@ app.delete('/users/:id', authRequired, adminOnly, async (req, res) => {
   if (Number(req.params.id) === req.auth.id) {
     return res.status(400).json({ error: 'Tidak bisa menghapus akun sendiri.' });
   }
+  const [[targetUser]] = await pool.query('SELECT * FROM users WHERE id=?', [req.params.id]);
+  if (!targetUser) return res.status(404).json({ error: 'Pengguna tidak ditemukan.' });
+
+  // Admin biasa tidak boleh menghapus admin lain / akun PT lain
+  if (req.auth.role !== 'superadmin') {
+    if (targetUser.role === 'admin' || targetUser.role === 'superadmin') {
+      return res.status(403).json({ error: 'Hanya superadmin yang boleh menghapus akun admin.' });
+    }
+    const [[me]] = await pool.query('SELECT company_id FROM users WHERE id=?', [req.auth.id]);
+    if (targetUser.company_id !== me.company_id) {
+      return res.status(403).json({ error: 'Akun ini milik PT lain.' });
+    }
+  }
+
   await pool.query('DELETE FROM users WHERE id=?', [req.params.id]);
-  res.json({ ok: true });
+
+  const [[me]] = await pool.query('SELECT * FROM users WHERE id=?', [req.auth.id]);
+  void logActivity(
+    req.auth.id,
+    me ? me.full_name : 'Admin',
+    req.auth.role,
+    targetUser.company_id,
+    'delete_user',
+    `Menghapus akun ${targetUser.role === 'admin' ? 'Admin Cabang' : 'Karyawan'}: ${targetUser.full_name} (${targetUser.email})`
+  );
+
+  res.json({ ok: true, message: 'Akun berhasil dihapus.' });
 });
 
 // ================= DEPARTMENTS =================
@@ -435,6 +536,56 @@ app.post('/attendances', authRequired, async (req, res) => {
     if (!me) return res.status(404).json({ error: 'Akun tidak ditemukan.' });
     const sessionType = b.sessionType || b.session_type || 'masuk';
     const approval = sessionType === 'izin_sakit' ? 'pending' : 'approved';
+
+    // Guard duplikat: satu masuk / pulang per user per tanggal; izin/sakit per rentang tanggal.
+    if (sessionType === 'masuk' || sessionType === 'pulang') {
+      // 1. Cek apakah ada izin/sakit aktif di tanggal ini (pending atau approved)
+      const [[activeLeave]] = await pool.query(
+        `SELECT id, status, approval_status, start_date, end_date FROM attendances 
+         WHERE user_id=? AND session_type='izin_sakit' 
+           AND approval_status IN ('pending', 'approved')
+           AND ? >= COALESCE(start_date, date) AND ? <= COALESCE(end_date, date) 
+         LIMIT 1`,
+        [me.id, b.date, b.date]
+      );
+      if (activeLeave) {
+        return res.status(409).json({
+          error: `Anda memiliki pengajuan ${activeLeave.status === 'sakit' ? 'sakit' : 'izin'} (${activeLeave.approvalStatus === 'approved' ? 'disetujui' : 'menunggu persetujuan'}) pada ${b.date}. Tidak dapat melakukan presensi masuk atau pulang saat izin aktif.`,
+        });
+      }
+
+      // 2. Cek apakah sesi ini sudah pernah tercatat
+      const [[dup]] = await pool.query(
+        "SELECT id FROM attendances WHERE user_id=? AND date=? AND session_type=? LIMIT 1",
+        [me.id, b.date, sessionType]
+      );
+      if (dup) {
+        return res.status(409).json({
+          error: `Presensi ${sessionType === 'masuk' ? 'masuk' : 'pulang'} pada ${b.date} sudah tersimpan. Tidak bisa absen dua kali.`,
+        });
+      }
+    } else if (sessionType === 'izin_sakit') {
+      const sDate = b.startDate || b.start_date || b.date;
+      const eDate = b.endDate || b.end_date || b.date;
+
+      // Fitur Overwrite: jika ada presensi masuk/pulang sebelumnya di rentang tanggal ini,
+      // izin akan menimpa (overwrite) presensi tersebut.
+      await pool.query(
+        `DELETE FROM attendances 
+         WHERE user_id=? AND session_type IN ('masuk', 'pulang') 
+           AND date >= ? AND date <= ?`,
+        [me.id, sDate, eDate]
+      );
+
+      // Timpa izin pending lama pada rentang tanggal yang sama agar tidak bentrok
+      await pool.query(
+        `DELETE FROM attendances 
+         WHERE user_id=? AND session_type='izin_sakit' AND approval_status='pending' 
+           AND start_date=? AND end_date=?`,
+        [me.id, sDate, eDate]
+      );
+    }
+
     const [r] = await pool.query(
       `INSERT INTO attendances (user_id, user_name, user_email, type, session_type, status, date,
         clock_in_time, latitude, longitude, distance_meters, office_name, office_color, company_id,
@@ -473,7 +624,55 @@ app.patch('/attendances/:id/review', authRequired, adminOnly, async (req, res) =
     decision, req.auth.id, note || null, req.params.id,
   ]);
   const [[row]] = await pool.query('SELECT * FROM attendances WHERE id=?', [req.params.id]);
+  const [[me]] = await pool.query('SELECT * FROM users WHERE id=?', [req.auth.id]);
+  void logActivity(
+    req.auth.id,
+    me ? me.full_name : 'Admin',
+    req.auth.role,
+    row ? row.company_id : null,
+    decision === 'approved' ? 'approve_leave' : 'reject_leave',
+    `${decision === 'approved' ? 'Menyetujui' : 'Menolak'} pengajuan izin ${row ? row.user_name : ''}${note ? `: "${note}"` : ''}`
+  );
   res.json({ attendance: publicAttendance(row) });
+});
+
+// ================= AUDIT LOGS (Superadmin & Admin Cabang) =================
+app.get('/audit-logs', authRequired, adminOnly, async (req, res) => {
+  try {
+    const { companyId, isSuper } = await requesterCompany(req);
+    let where = '';
+    const args = [];
+    if (!isSuper) {
+      where = 'WHERE a.company_id=?';
+      args.push(companyId);
+    } else if (req.query.company_id) {
+      where = 'WHERE a.company_id=?';
+      args.push(Number(req.query.company_id));
+    }
+    const [rows] = await pool.query(
+      `SELECT a.*, c.name AS company_name 
+       FROM audit_logs a 
+       LEFT JOIN companies c ON c.id=a.company_id 
+       ${where} 
+       ORDER BY a.id DESC LIMIT 100`,
+      args
+    );
+    res.json({
+      logs: rows.map((r) => ({
+        id: String(r.id),
+        userId: String(r.user_id),
+        userName: r.user_name,
+        userRole: r.user_role,
+        companyId: r.company_id ? String(r.company_id) : null,
+        companyName: r.company_name || null,
+        action: r.action,
+        description: r.description,
+        createdAt: r.created_at,
+      })),
+    });
+  } catch (e) {
+    res.status(500).json({ error: e.message });
+  }
 });
 
 // ================= UPLOAD (pengganti Storage buckets) =================

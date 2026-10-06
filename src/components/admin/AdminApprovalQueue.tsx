@@ -48,7 +48,7 @@ export const AdminApprovalQueue: React.FC<AdminApprovalQueueProps> = ({ requests
               <Text style={styles.name}>{item.userName}</Text>
               <Text style={styles.sub} numberOfLines={1}>
                 {item.startDate && item.endDate && item.startDate !== item.endDate
-                  ? `${item.startDate} – ${item.endDate}`
+                  ? `${item.startDate} - ${item.endDate}`
                   : item.date}
                 {item.reason ? ` • ${item.reason}` : ''}
               </Text>

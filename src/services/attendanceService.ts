@@ -244,9 +244,22 @@ export class AttendanceService {
   static async deleteEmployeeAccount(id: string): Promise<{ success: boolean; message: string }> {
     try {
       await apiFetch(`/users/${id}`, { method: 'DELETE' });
-      return { success: true, message: 'Akun karyawan berhasil dihapus.' };
+      return { success: true, message: 'Akun berhasil dihapus.' };
     } catch (e: any) {
       return { success: false, message: e?.message || 'Gagal menghapus akun.' };
+    }
+  }
+
+  // Ubah kata sandi pengguna / admin cabang oleh Superadmin atau Admin
+  static async resetUserPassword(id: string, newPassword: string): Promise<{ success: boolean; message: string }> {
+    try {
+      await apiFetch(`/users/${id}`, {
+        method: 'PATCH',
+        body: { password: newPassword },
+      });
+      return { success: true, message: 'Kata sandi berhasil diperbarui.' };
+    } catch (e: any) {
+      return { success: false, message: e?.message || 'Gagal memperbarui kata sandi.' };
     }
   }
 
@@ -516,6 +529,16 @@ export class AttendanceService {
     }
   }
 
+  static async deleteCompany(id: string, force = false): Promise<{ success: boolean; message: string }> {
+    try {
+      const q = force ? '?force=true' : '';
+      await apiFetch(`/companies/${id}${q}`, { method: 'DELETE' });
+      return { success: true, message: 'PT berhasil dihapus.' };
+    } catch (e: any) {
+      return { success: false, message: e?.message || 'Gagal menghapus PT.' };
+    }
+  }
+
   static async getPendingApprovals(): Promise<AttendanceRecord[]> {
     try {
       const data = await apiFetch<{ attendances: any[] }>('/attendances?approval=pending');
@@ -582,6 +605,27 @@ export class AttendanceService {
       };
     } catch (e: any) {
       return { success: false, message: e?.message || 'Gagal memproses persetujuan.' };
+    }
+  }
+
+  /** Mengambil riwayat Audit Trail keaktifan admin cabang (khusus Superadmin & Admin). */
+  static async getAuditLogs(companyId?: string): Promise<import('../types/attendance').AuditLog[]> {
+    try {
+      const q = companyId ? `?company_id=${companyId}` : '';
+      const data = await apiFetch<{ logs: any[] }>(`/audit-logs${q}`);
+      return (data.logs || []).map((l: any) => ({
+        id: String(l.id),
+        userId: String(l.userId),
+        userName: l.userName,
+        userRole: l.userRole,
+        companyId: l.companyId ? String(l.companyId) : null,
+        companyName: l.companyName || null,
+        action: l.action,
+        description: l.description,
+        createdAt: l.createdAt,
+      }));
+    } catch {
+      return [];
     }
   }
 }
