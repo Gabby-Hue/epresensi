@@ -20,6 +20,7 @@ const {
 } = require('./auth');
 
 const app = express();
+app.set('trust proxy', 1);
 const PORT = Number(process.env.PORT || 3001);
 
 app.use(cors());
@@ -688,7 +689,9 @@ app.post('/upload/:kind', authRequired, (req, res) => {
       return res.status(400).json({ error: err.message || 'Gagal memproses file upload.' });
     }
     if (!req.file) return res.status(400).json({ error: 'File wajib dikirim (field: file).' });
-    const url = `${req.protocol}://${req.get('host')}/uploads/${req.params.kind}/${req.file.filename}`;
+    const proto = req.headers['x-forwarded-proto'] || req.protocol || 'http';
+    const host = req.headers['x-forwarded-host'] || req.get('host');
+    const url = `${proto}://${host}/uploads/${req.params.kind}/${req.file.filename}`;
     res.status(201).json({ url });
   });
 });

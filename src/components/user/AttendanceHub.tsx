@@ -4,6 +4,7 @@ import {
   Animated,
   Dimensions,
   Image,
+  Linking,
   Platform,
   ScrollView,
   StyleSheet,
@@ -36,6 +37,7 @@ import { MonthAttendanceCalendar } from './MonthAttendanceCalendar';
 import { ProfileScreen } from './ProfileScreen';
 import { BottomNavBar, UserTabKey } from '../ui/BottomNavBar';
 import { StorageService } from '../../services/storageService';
+import { resolveMediaUrl } from '../../lib/api';
 import { succeed, fail, select } from '../../services/feedbackService';
 import { isWeekendDateString, isAfterTimeOfDay, todayWIB } from '../../utils/dates';
 import { getHolidayName, isNationalHoliday } from '../../utils/holidays';
@@ -550,7 +552,10 @@ export const AttendanceHub: React.FC<AttendanceHubProps> = ({
         style={styles.logRow}
       >
         {item.photoUrl ? (
-          <Image source={{ uri: item.photoUrl }} style={styles.logThumb} />
+          <Image
+            source={{ uri: resolveMediaUrl(item.photoUrl) || item.photoUrl }}
+            style={styles.logThumb}
+          />
         ) : (
           <View style={styles.logFallback}>
             <Feather
@@ -1414,6 +1419,7 @@ export const AttendanceHub: React.FC<AttendanceHubProps> = ({
       {/* Detail log + foto bukti */}
       <Modal visible={!!selectedLog} onClose={() => setSelectedLog(null)} title="Bukti Kehadiran">
         {selectedLog && (
+          <ScrollView showsVerticalScrollIndicator={false}>
           <View>
             <View style={styles.modalHeaderRow}>
               {selectedLog.type === 'izin_sakit' && selectedLog.approvalStatus === 'pending' ? (
@@ -1452,13 +1458,49 @@ export const AttendanceHub: React.FC<AttendanceHubProps> = ({
             </View>
             {selectedLog.photoUrl ? (
               <View style={styles.photoSection}>
-                <Text style={styles.photoTitle}>Foto bukti presensi:</Text>
-                <Image source={{ uri: selectedLog.photoUrl }} style={styles.fullPhoto} />
+                <View style={styles.photoHeaderRow}>
+                  <Text style={styles.photoTitle}>Foto bukti presensi:</Text>
+                  {resolveMediaUrl(selectedLog.photoUrl) ? (
+                    <TouchableOpacity
+                      onPress={() => Linking.openURL(resolveMediaUrl(selectedLog.photoUrl)!).catch(() => {})}
+                      hitSlop={8}
+                    >
+                      <Text style={styles.photoOpenLink}>Buka Foto Penuh ↗</Text>
+                    </TouchableOpacity>
+                  ) : null}
+                </View>
+                <View style={styles.photoFrame}>
+                  <Image
+                    source={{ uri: resolveMediaUrl(selectedLog.photoUrl) || selectedLog.photoUrl }}
+                    style={styles.fullPhoto}
+                    resizeMode="cover"
+                  />
+                </View>
               </View>
             ) : (
               <Text style={styles.noPhotoText}>Tidak ada foto bukti untuk catatan ini.</Text>
             )}
+            {selectedLog.documentUrl ? (
+              <View style={styles.photoSection}>
+                <Text style={styles.photoTitle}>Dokumen surat izin/sakit:</Text>
+                {/\.(png|jpe?g|webp|gif)(\?|#|$)/i.test(selectedLog.documentUrl) ? (
+                  <Image source={{ uri: selectedLog.documentUrl }} style={styles.fullPhoto} resizeMode="contain" />
+                ) : (
+                  <TouchableOpacity
+                    activeOpacity={0.7}
+                    style={styles.docOpenBtn}
+                    onPress={() => Linking.openURL(selectedLog.documentUrl as string).catch(() => {
+                      Alert.alert('Gagal', 'Tidak bisa membuka dokumen.');
+                    })}
+                  >
+                    <Feather name="file-text" size={18} color={colors.primaryDark} style={{ marginRight: 8 }} />
+                    <Text style={styles.docOpenText}>Buka Dokumen Surat</Text>
+                  </TouchableOpacity>
+                )}
+              </View>
+            ) : null}
           </View>
+          </ScrollView>
         )}
       </Modal>
     </View>
@@ -1949,16 +1991,51 @@ const styles = StyleSheet.create({
   photoSection: {
     marginTop: 8,
   },
+  photoHeaderRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'space-between',
+    marginBottom: 8,
+  },
+  photoOpenLink: {
+    fontSize: fontSize.xs,
+    color: colors.primaryDark,
+    fontWeight: '700',
+  },
   photoTitle: {
     fontSize: fontSize.sm,
     fontWeight: '700',
     color: colors.ink,
-    marginBottom: 10,
   },
-  fullPhoto: {
+  photoFrame: {
     width: '100%',
     height: 260,
     borderRadius: radius.md,
+    backgroundColor: colors.surfaceSoft,
+    overflow: 'hidden',
+    borderWidth: 1,
+    borderColor: colors.border,
+  },
+  fullPhoto: {
+    width: '100%',
+    height: '100%',
+    borderRadius: radius.md,
+  },
+  docOpenBtn: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'center',
+    backgroundColor: colors.surface,
+    borderWidth: 1,
+    borderColor: colors.primaryDark,
+    borderRadius: radius.md,
+    paddingVertical: 14,
+    paddingHorizontal: 16,
+  },
+  docOpenText: {
+    fontSize: fontSize.sm,
+    fontWeight: '700',
+    color: colors.primaryDark,
   },
   noPhotoText: {
     fontSize: fontSize.sm,
@@ -2219,6 +2296,7 @@ const styles = StyleSheet.create({
     fontSize: 13,
     color: colors.ink,
     minHeight: 44,
+    ...(Platform.OS === 'web' ? ({ outlineStyle: 'none', outlineWidth: 0 } as any) : {}),
   },
   reasonInputError: {
     borderColor: colors.danger,

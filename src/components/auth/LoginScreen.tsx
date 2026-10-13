@@ -30,6 +30,7 @@ export const LoginScreen: React.FC<LoginScreenProps> = ({ onLoginSuccess }) => {
   const [showPassword, setShowPassword] = useState(false);
   const [loading, setLoading] = useState(false);
   const [errorMessage, setErrorMessage] = useState<string | null>(null);
+  const [focusedField, setFocusedField] = useState<'email' | 'password' | null>(null);
 
   const handleLogin = async () => {
     setErrorMessage(null);
@@ -85,8 +86,13 @@ export const LoginScreen: React.FC<LoginScreenProps> = ({ onLoginSuccess }) => {
 
             <View style={styles.field}>
               <Text style={styles.label}>Email</Text>
-              <View style={styles.inputRow}>
-                <Feather name="mail" size={16} color={colors.faint} style={styles.inputIcon} />
+              <View style={[styles.inputRow, focusedField === 'email' && styles.inputRowFocused]}>
+                <Feather
+                  name="mail"
+                  size={16}
+                  color={focusedField === 'email' ? colors.primary : colors.faint}
+                  style={styles.inputIcon}
+                />
                 <TextInput
                   style={styles.input}
                   placeholder="nama@kantor.com"
@@ -97,14 +103,21 @@ export const LoginScreen: React.FC<LoginScreenProps> = ({ onLoginSuccess }) => {
                   keyboardType="email-address"
                   autoComplete="email"
                   returnKeyType="next"
+                  onFocus={() => setFocusedField('email')}
+                  onBlur={() => setFocusedField(null)}
                 />
               </View>
             </View>
 
             <View style={styles.field}>
               <Text style={styles.label}>Kata sandi</Text>
-              <View style={styles.inputRow}>
-                <Feather name="lock" size={16} color={colors.faint} style={styles.inputIcon} />
+              <View style={[styles.inputRow, focusedField === 'password' && styles.inputRowFocused]}>
+                <Feather
+                  name="lock"
+                  size={16}
+                  color={focusedField === 'password' ? colors.primary : colors.faint}
+                  style={styles.inputIcon}
+                />
                 <TextInput
                   style={styles.input}
                   placeholder="Kata sandi"
@@ -115,6 +128,8 @@ export const LoginScreen: React.FC<LoginScreenProps> = ({ onLoginSuccess }) => {
                   autoComplete="password"
                   returnKeyType="done"
                   onSubmitEditing={handleLogin}
+                  onFocus={() => setFocusedField('password')}
+                  onBlur={() => setFocusedField(null)}
                 />
                 <TouchableOpacity
                   onPress={() => setShowPassword((v) => !v)}
@@ -245,6 +260,10 @@ const styles = StyleSheet.create({
     paddingHorizontal: spacing.sm,
     minHeight: touch.inputMinHeight,
   },
+  inputRowFocused: {
+    borderColor: colors.primary,
+    borderWidth: 1.5,
+  },
   inputIcon: {
     marginRight: spacing.xs,
   },
@@ -256,6 +275,7 @@ const styles = StyleSheet.create({
     paddingLeft: spacing.xs,
     paddingRight: spacing.xs,
     textAlignVertical: 'center',
+    ...(Platform.OS === 'web' ? ({ outlineStyle: 'none', outlineWidth: 0 } as any) : {}),
   },
   eyeBtn: {
     padding: 8,

@@ -8,6 +8,28 @@ import {
   View,
   useWindowDimensions,
 } from 'react-native';
+
+// Reset border/outline hitam bawaan browser saat input teks aktif di Web
+if (Platform.OS === 'web' && typeof document !== 'undefined') {
+  const existing = document.getElementById('epresensi-global-input-style');
+  if (!existing) {
+    const style = document.createElement('style');
+    style.id = 'epresensi-global-input-style';
+    style.textContent = `
+      input, textarea, select {
+        outline: none !important;
+        outline-width: 0 !important;
+        box-shadow: none !important;
+      }
+      input:focus, textarea:focus, select:focus {
+        outline: none !important;
+        outline-width: 0 !important;
+        box-shadow: none !important;
+      }
+    `;
+    document.head.appendChild(style);
+  }
+}
 import { SafeAreaProvider, SafeAreaView } from 'react-native-safe-area-context';
 import {
   AttendanceRecord,

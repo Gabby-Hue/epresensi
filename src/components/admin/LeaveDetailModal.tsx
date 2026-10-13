@@ -1,5 +1,5 @@
 import React, { useState } from 'react';
-import { Image, ScrollView, StyleSheet, Text, TextInput, TouchableOpacity, View } from 'react-native';
+import { Image, Linking, ScrollView, StyleSheet, Text, TextInput, TouchableOpacity, View } from 'react-native';
 import { AttendanceRecord } from '../../types/attendance';
 import { Modal } from '../ui/Modal';
 import { Badge } from '../ui/Badge';
@@ -81,9 +81,21 @@ export const LeaveDetailModal: React.FC<LeaveDetailModalProps> = ({
 
         {record.documentUrl && (
           <View style={styles.section}>
-            <View style={styles.imageBox}>
-              <Image source={{ uri: record.documentUrl }} style={styles.docImage} resizeMode="cover" />
-            </View>
+            <Text style={styles.docTitle}>Dokumen surat:</Text>
+            {/\.(png|jpe?g|webp|gif)(\?|#|$)/i.test(record.documentUrl) ? (
+              <View style={styles.imageBox}>
+                <Image source={{ uri: record.documentUrl }} style={styles.docImage} resizeMode="contain" />
+              </View>
+            ) : (
+              <TouchableOpacity
+                activeOpacity={0.7}
+                style={styles.docOpenBtn}
+                onPress={() => Linking.openURL(record.documentUrl as string).catch(() => {})}
+              >
+                <Feather name="file-text" size={18} color={colors.primaryDark} style={{ marginRight: 8 }} />
+                <Text style={styles.docOpenText}>Buka Dokumen Surat</Text>
+              </TouchableOpacity>
+            )}
           </View>
         )}
 
@@ -238,6 +250,28 @@ const styles = StyleSheet.create({
   docImage: {
     width: '100%',
     height: 200,
+  },
+  docTitle: {
+    fontSize: fontSize.sm,
+    fontWeight: '700',
+    color: colors.ink,
+    marginBottom: 10,
+  },
+  docOpenBtn: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'center',
+    backgroundColor: colors.surface,
+    borderWidth: 1,
+    borderColor: colors.primaryDark,
+    borderRadius: radius.md,
+    paddingVertical: 14,
+    paddingHorizontal: 16,
+  },
+  docOpenText: {
+    fontSize: fontSize.sm,
+    fontWeight: '700',
+    color: colors.primaryDark,
   },
   pendingBanner: {
     flexDirection: 'row',

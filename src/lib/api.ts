@@ -125,13 +125,31 @@ export async function uploadFile(
   uri: string,
   filename: string
 ): Promise<string> {
+  // Deteksi tipe MIME dari nama file agar PDF tidak dikirim sebagai octet-stream.
+  const lower = (filename || '').toLowerCase();
+  const mime = lower.endsWith('.pdf')
+    ? 'application/pdf'
+    : lower.endsWith('.png')
+      ? 'image/png'
+      : lower.endsWith('.webp')
+        ? 'image/webp'
+        : 'image/jpeg';
   const form = new FormData();
   if (uri.startsWith('data:')) {
     form.append('file', dataUrlToBlob(uri), filename);
+  } else if (uri.startsWith('file:') || uri.startsWith('content:')) {
+    // Native Android/iOS: uri bisa file:// atau content:// (DocumentPicker).
+    // fetch(content://) GAGAL di Android, jadi kirim objek file RN langsung.
+    (form as any).append('file', { uri, name: filename, type: mime } as any);
   } else {
-    const res = await fetch(uri);
-    const blob = await res.blob();
-    (form as any).append('file', blob, filename);
+    // Web: blob/http/blob URL — baca dulu jadi Blob baru bisa di-append.
+    try {
+      const res = await fetch(uri);
+      const blob = await res.blob();
+      (form as any).append('file', blob, filename);
+    } catch {
+      throw new Error('Upload gagal: tidak bisa membaca file.');
+    }
   }
   const token = await getToken();
   let res: Response;
@@ -152,4 +170,35 @@ export async function uploadFile(
   }
   if (!res.ok || !data?.url) throw new Error(data?.error || `Upload gagal (${res.status}).`);
   return data.url as string;
+}
+
+/**
+ * Normalisasi URL media (foto presensi, avatar, dokumen lampiran)
+ * agar selalu valid diakses dari Android / iOS / Web:
+ * - Mengubah URL relatif (/uploads/...) jadi URL absolut dengan apiBaseUrl
+ * - Mengubah localhost/127.0.0.1 jadi apiBaseUrl aktif
+ * - Mengubah http:// jadi https:// bila backend menggunakan HTTPS (mencegah Android cleartext block)
+ */
+export function resolveMediaUrl(url?: string | null): string | null {
+  if (!url) return null;
+  let clean = String(url).trim();
+  if (!clean) return null;
+
+  if (clean.startsWith('data:') || clean.startsWith('blob:') || clean.startsWith('file:') || clean.startsWith('content:')) {
+    return clean;
+  }
+
+  if (clean.startsWith('/')) {
+    return `${apiBaseUrl}${clean}`;
+  }
+
+  if (/^https?:\/\/(localhost|127\.0\.0\.1)(:\d+)?\//i.test(clean)) {
+    clean = clean.replace(/^https?:\/\/(localhost|127\.0\.0\.1)(:\d+)?/i, apiBaseUrl);
+  }
+
+  if (apiBaseUrl.startsWith('https://') && clean.startsWith('http://')) {
+    clean = clean.replace(/^http:\/\//i, 'https://');
+  }
+
+  return clean;
 }

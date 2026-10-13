@@ -1,6 +1,7 @@
 import React, { useState } from 'react';
 import {
   Alert,
+  Image,
   KeyboardAvoidingView,
   Platform,
   ScrollView,
@@ -304,9 +305,14 @@ export const LeaveRequestForm: React.FC<LeaveRequestFormProps> = ({ onSubmit, on
             </Text>
             {attachedUri ? (
               <View style={styles.attachmentBox}>
-                <View style={styles.attachmentIconCircle}>
-                  <Feather name="file-text" size={18} color={colors.primary} />
-                </View>
+                {/\.(png|jpe?g|webp|gif)$/i.test(attachedName || '') ||
+                (attachedUri.startsWith('data:image')) ? (
+                  <Image source={{ uri: attachedUri }} style={styles.attachmentThumb} />
+                ) : (
+                  <View style={styles.attachmentIconCircle}>
+                    <Feather name="file-text" size={18} color={colors.primary} />
+                  </View>
+                )}
                 <View style={styles.attachmentInfo}>
                   <Text style={styles.attachmentName} numberOfLines={1}>
                     {attachedName || 'Berkas_Terlampir'}
@@ -644,6 +650,7 @@ const styles = StyleSheet.create({
     fontSize: fontSize.sm,
     color: colors.ink,
     minHeight: 50,
+    ...(Platform.OS === 'web' ? ({ outlineStyle: 'none', outlineWidth: 0 } as any) : {}),
   },
   textArea: {
     minHeight: 100,
@@ -666,6 +673,13 @@ const styles = StyleSheet.create({
     alignItems: 'center',
     justifyContent: 'center',
     marginRight: 10,
+  },
+  attachmentThumb: {
+    width: 52,
+    height: 52,
+    borderRadius: 10,
+    marginRight: 10,
+    backgroundColor: '#FFFFFF',
   },
   attachmentInfo: {
     flex: 1,

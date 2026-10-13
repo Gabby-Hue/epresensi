@@ -462,7 +462,7 @@ export const CameraModal: React.FC<CameraModalProps> = ({
               </View>
             ) : (
               <View style={{ flex: 1 }}>
-                <CameraView style={styles.nativeCamera} facing="front" ref={cameraRef}>
+                <CameraView mode="picture" style={styles.nativeCamera} facing="front" ref={cameraRef}>
                   <View style={styles.targetGuideOverlay}>
                     <View style={styles.targetCircle} />
                     <Text style={styles.targetGuideText}>Posisikan wajah Anda di dalam panduan</Text>

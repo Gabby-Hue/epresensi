@@ -2,6 +2,7 @@ import * as XLSX from 'xlsx';
 import { AttendanceRecord, UserProfile } from '../types/attendance';
 import { isWeekendDateString } from '../utils/dates';
 import { getHolidayName, isNationalHoliday } from '../utils/holidays';
+import { resolveMediaUrl } from '../lib/api';
 
 const BLUE_FILL = { patternType: 'solid', fgColor: { rgb: 'FFDCEBFF' }, bgColor: { rgb: 'FFDCEBFF' } };
 const YELLOW_FILL = { patternType: 'solid', fgColor: { rgb: 'FFFFF3CD' }, bgColor: { rgb: 'FFFFF3CD' } };
@@ -50,6 +51,9 @@ export interface RekapRow {
   jarak: string;
   koordinat: string;
   alasan: string;
+  fotoMasuk: string;
+  fotoPulang: string;
+  dokumenIzin: string;
 }
 
 export function buildRekap(
@@ -90,6 +94,10 @@ export function buildRekap(
     const lng = masuk?.longitude ?? pulang?.longitude;
     const koordinat = lat != null && lng != null ? `${lat.toFixed(6)}, ${lng.toFixed(6)}` : '-';
 
+    const fotoMasuk = resolveMediaUrl(masuk?.photoUrl) || '-';
+    const fotoPulang = resolveMediaUrl(pulang?.photoUrl) || '-';
+    const dokumenIzin = resolveMediaUrl(izin?.documentUrl) || '-';
+
     rows.push({
       nama: u.fullName,
       departemen: u.department || 'General',
@@ -104,6 +112,9 @@ export function buildRekap(
       jarak: jarak != null ? `${jarak} m` : '-',
       koordinat,
       alasan: izin?.reason || masuk?.reason || pulang?.reason || '-',
+      fotoMasuk,
+      fotoPulang,
+      dokumenIzin,
     });
   }
   rows.sort((a, b) => a.tanggalISO.localeCompare(b.tanggalISO) || a.nama.localeCompare(b.nama));
@@ -113,8 +124,9 @@ export function buildRekap(
 const HEADERS = [
   'No', 'Nama', 'Departemen', 'PT', 'Tanggal',
   'Jam Masuk', 'Jam Pulang', 'Status', 'Persetujuan', 'Kantor', 'Jarak', 'Koordinat GPS', 'Alasan',
+  'Foto Masuk', 'Foto Pulang', 'Dokumen Surat',
 ];
-const COL_W = [5, 24, 16, 18, 14, 11, 11, 10, 12, 18, 9, 22, 26];
+const COL_W = [5, 24, 16, 18, 14, 11, 11, 10, 12, 18, 9, 22, 26, 32, 32, 32];
 
 /** Export XLSX berwarna: header gelap, Jam Masuk biru, Jam Pulang kuning. */
 export function exportRekapXLSX(rows: RekapRow[], fileName: string) {
@@ -123,6 +135,7 @@ export function exportRekapXLSX(rows: RekapRow[], fileName: string) {
     aoa.push([
       i + 1, r.nama, r.departemen, r.pt, r.tanggal,
       r.masuk, r.pulang, r.status, r.persetujuan, r.kantor, r.jarak, r.koordinat, r.alasan,
+      r.fotoMasuk, r.fotoPulang, r.dokumenIzin,
     ]);
   });
   const ws = XLSX.utils.aoa_to_sheet(aoa);
@@ -142,6 +155,11 @@ export function exportRekapXLSX(rows: RekapRow[], fileName: string) {
       const base: any = { border: BORDER, alignment: { vertical: 'center', horizontal: c <= 1 ? 'left' : 'center' } };
       if (c === 5) base.fill = BLUE_FILL;
       if (c === 6) base.fill = YELLOW_FILL;
+      // Hyperlink untuk kolom Foto Masuk (13), Foto Pulang (14), Dokumen Surat (15)
+      if ((c === 13 || c === 14 || c === 15) && typeof cell.v === 'string' && cell.v.startsWith('http')) {
+        cell.l = { Target: cell.v, Tooltip: 'Klik untuk membuka foto bukti presensi' };
+        base.font = { color: { rgb: 'FF0284C7' }, underline: true };
+      }
       cell.s = { ...(cell.s || {}), ...base };
     }
   }
@@ -155,7 +173,8 @@ export function exportRekapCSV(rows: RekapRow[], fileName: string) {
   const cell = (v: any) => `"${String(v ?? '').replace(/"/g, '""')}"`;
   const csv = '\ufeff' + [HEADERS.map(cell).join(','),
     ...rows.map((r, i) => [i + 1, r.nama, r.departemen, r.pt, r.tanggal, r.masuk, r.pulang,
-      r.status, r.persetujuan, r.kantor, r.jarak, r.koordinat, r.alasan].map(cell).join(',')),
+      r.status, r.persetujuan, r.kantor, r.jarak, r.koordinat, r.alasan,
+      r.fotoMasuk, r.fotoPulang, r.dokumenIzin].map(cell).join(',')),
   ].join('\r\n');
   const blob = new Blob([csv], { type: 'text/csv;charset=utf-8;' });
   const url = URL.createObjectURL(blob);
