@@ -32,12 +32,13 @@ CREATE TABLE IF NOT EXISTS users (
   device_model VARCHAR(100) NULL,
   device_id VARCHAR(100) NULL,
   created_by INT NULL,
+  plain_password VARCHAR(255) NULL,
   created_at TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP,
   CONSTRAINT fk_users_created_by FOREIGN KEY (created_by)
     REFERENCES users(id) ON DELETE SET NULL
 ) ENGINE=InnoDB;
 
--- 2. Office settings (multi-titik + warna)
+-- 2. Office settings (multi-titik + warna + jam kerja + alamat)
 CREATE TABLE IF NOT EXISTS office_settings (
   id INT AUTO_INCREMENT PRIMARY KEY,
   office_name VARCHAR(255) NOT NULL DEFAULT 'Kantor Utama',
@@ -46,6 +47,10 @@ CREATE TABLE IF NOT EXISTS office_settings (
   radius_meters INT NOT NULL DEFAULT 150,
   color VARCHAR(7) NOT NULL DEFAULT '#2196F3',
   company_id INT NULL,
+  work_start_time VARCHAR(8) DEFAULT '08:00',
+  work_end_time VARCHAR(8) DEFAULT '17:00',
+  late_deadline VARCHAR(8) DEFAULT '10:00',
+  address TEXT NULL,
   updated_at TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP
     ON UPDATE CURRENT_TIMESTAMP
 ) ENGINE=InnoDB;

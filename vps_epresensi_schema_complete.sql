@@ -57,6 +57,7 @@ CREATE TABLE users (
   device_model VARCHAR(100) NULL,
   device_id VARCHAR(100) NULL,
   created_by INT NULL,
+  plain_password VARCHAR(255) NULL,
   created_at TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP,
   CONSTRAINT fk_users_company FOREIGN KEY (company_id)
     REFERENCES companies(id) ON DELETE SET NULL,
@@ -78,6 +79,10 @@ CREATE TABLE office_settings (
   radius_meters INT NOT NULL DEFAULT 150,
   color VARCHAR(7) NOT NULL DEFAULT '#2196F3',
   company_id INT NULL,
+  work_start_time VARCHAR(8) DEFAULT '08:00',
+  work_end_time VARCHAR(8) DEFAULT '17:00',
+  late_deadline VARCHAR(8) DEFAULT '10:00',
+  address TEXT NULL,
   updated_at TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP
     ON UPDATE CURRENT_TIMESTAMP,
   CONSTRAINT fk_office_company FOREIGN KEY (company_id)
@@ -203,13 +208,12 @@ INSERT INTO departments (name, company_id) VALUES
 -- 3. Akun Pengguna Awal (Semua Password: '123456')
 -- Hash bcrypt 10 rounds: $2a$10$uFuLQnv39f6v4fLUVRh4L.4WDGvPkasENgz6eVJ4V2BIP6GI3Vn9.
 INSERT INTO users (
-  id, email, password_hash, full_name, role, department, company_id
+  id, email, password_hash, full_name, role, department, company_id, plain_password
 ) VALUES
-  (1, 'admin@admin.com', '$2a$10$uFuLQnv39f6v4fLUVRh4L.4WDGvPkasENgz6eVJ4V2BIP6GI3Vn9.', 'Super Admin E-Presensi', 'superadmin', 'Management', 1),
-  (2, 'admin@admin', '$2a$10$uFuLQnv39f6v4fLUVRh4L.4WDGvPkasENgz6eVJ4V2BIP6GI3Vn9.', 'Super Admin (Alias)', 'superadmin', 'Management', 1),
-  (3, 'neil@gmail.com', '$2a$10$uFuLQnv39f6v4fLUVRh4L.4WDGvPkasENgz6eVJ4V2BIP6GI3Vn9.', 'Neil', 'employee', 'IT', 1),
-  (4, 'satya@gmail.com', '$2a$10$uFuLQnv39f6v4fLUVRh4L.4WDGvPkasENgz6eVJ4V2BIP6GI3Vn9.', 'Satya', 'employee', 'Drafter', 1),
-  (5, 'gabby@gmail.com', '$2a$10$uFuLQnv39f6v4fLUVRh4L.4WDGvPkasENgz6eVJ4V2BIP6GI3Vn9.', 'Gabby', 'employee', 'Human Capital', 1);
+  (1, 'admin@admin', '$2a$10$uFuLQnv39f6v4fLUVRh4L.4WDGvPkasENgz6eVJ4V2BIP6GI3Vn9.', 'Super Admin E-Presensi', 'superadmin', 'Management', 1, '123456'),
+  (2, 'neil@gmail.com', '$2a$10$uFuLQnv39f6v4fLUVRh4L.4WDGvPkasENgz6eVJ4V2BIP6GI3Vn9.', 'Neil', 'employee', 'Engginer', 1, '123456'),
+  (3, 'satya@gmail.com', '$2a$10$uFuLQnv39f6v4fLUVRh4L.4WDGvPkasENgz6eVJ4V2BIP6GI3Vn9.', 'Satya', 'employee', 'Engginer', 1, '123456'),
+  (4, 'gabby@gmail.com', '$2a$10$uFuLQnv39f6v4fLUVRh4L.4WDGvPkasENgz6eVJ4V2BIP6GI3Vn9.', 'Gabby', 'employee', 'HR', 1, '123456');
 
 -- 4. Titik Kantor Default (ID 1)
 INSERT INTO office_settings (
