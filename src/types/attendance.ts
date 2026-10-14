@@ -6,6 +6,14 @@ export interface Company {
   createdAt?: string;
 }
 
+export interface DepartmentItem {
+  id: string;
+  name: string;
+  companyId?: string | null;
+  employeeCount: number;
+  createdAt?: string;
+}
+
 export type AttendanceType = 'luring' | 'daring' | 'izin_sakit';
 
 export type SessionType = 'masuk' | 'pulang' | 'izin_sakit';

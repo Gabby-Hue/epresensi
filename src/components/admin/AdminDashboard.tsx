@@ -18,6 +18,7 @@ import { GeofenceSettings } from './GeofenceSettings';
 import { AttendanceFeed } from './AttendanceFeed';
 import { LeaveDetailModal } from './LeaveDetailModal';
 import { AdminEmployeeManager } from './AdminEmployeeManager';
+import { AdminDepartmentManager } from './AdminDepartmentManager';
 import { AdminCompanyManager } from './AdminCompanyManager';
 import { AdminEmployeeRecap } from './AdminEmployeeRecap';
 import { AdminApprovalQueue } from './AdminApprovalQueue';
@@ -41,7 +42,7 @@ interface AdminDashboardProps {
   onPressProfile?: () => void;
 }
 
-type TabKey = 'companies' | 'monitoring' | 'report' | 'geofence' | 'employees' | 'approval';
+type TabKey = 'companies' | 'monitoring' | 'report' | 'geofence' | 'departments' | 'employees' | 'approval';
 
 const TABS: Array<{
   key: TabKey;
@@ -54,6 +55,7 @@ const TABS: Array<{
   { key: 'monitoring', label: 'Monitoring', icon: 'pie-chart' },
   { key: 'report', label: 'Laporan', icon: 'bar-chart-2', branchOnly: true },
   { key: 'geofence', label: 'Titik & Radius', icon: 'map', branchOnly: true },
+  { key: 'departments', label: 'Departemen', icon: 'grid', branchOnly: true },
   { key: 'employees', label: 'Kelola Karyawan', icon: 'user-plus', branchOnly: true },
   { key: 'approval', label: 'Persetujuan', icon: 'inbox', branchOnly: true },
 ];
@@ -154,6 +156,10 @@ export const AdminDashboard: React.FC<AdminDashboardProps> = ({
       : { title: 'Monitoring Kehadiran', sub: 'Pantau absen karyawan cabang hari ini' },
     report: { title: 'Laporan Departemen', sub: 'Bandingkan kehadiran departemen cabang' },
     geofence: { title: 'Titik & Radius', sub: 'Kelola lokasi dan radius absen kantor cabang' },
+    departments: {
+      title: 'Kelola Departemen',
+      sub: 'Atur divisi cabang, tambah, ubah nama, reassign karyawan, atau hapus',
+    },
     employees: { title: 'Kelola Karyawan', sub: 'Akun dan perangkat karyawan cabang' },
     approval: { title: 'Persetujuan Izin', sub: 'Pengajuan yang menunggu keputusan admin cabang' },
   };
@@ -591,7 +597,16 @@ export const AdminDashboard: React.FC<AdminDashboardProps> = ({
         />
       )}
 
-      {/* 4. TAB KELOLA KARYAWAN (HANYA ADMIN CABANG) */}
+      {/* 4. TAB KELOLA DEPARTEMEN (HANYA ADMIN CABANG) */}
+      {activeTab === 'departments' && !isSuper && (
+        <AdminDepartmentManager
+          currentAdmin={currentAdmin}
+          users={users}
+          onChanged={onRefreshUsers}
+        />
+      )}
+
+      {/* 5. TAB KELOLA KARYAWAN (HANYA ADMIN CABANG) */}
       {activeTab === 'employees' && !isSuper && (
         <AdminEmployeeManager
           currentAdmin={currentAdmin}

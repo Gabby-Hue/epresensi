@@ -41,10 +41,10 @@ export const AdminEmployeeManager: React.FC<AdminEmployeeManagerProps> = ({
   const [formError, setFormError] = useState<string | null>(null);
 
   useEffect(() => {
-    AttendanceService.getDepartments().then((list) => {
+    AttendanceService.getDepartments(currentAdmin.companyId || undefined).then((list) => {
       if (list && list.length > 0) setDepartments(list);
     });
-  }, []);
+  }, [currentAdmin.companyId, users]);
 
   const [editing, setEditing] = useState<UserProfile | null>(null);
   const [editName, setEditName] = useState('');

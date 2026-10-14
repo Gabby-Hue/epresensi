@@ -87,16 +87,20 @@ CREATE TABLE IF NOT EXISTS attendances (
   INDEX idx_att_email (user_email)
 ) ENGINE=InnoDB;
 
--- 4. Departments (master data departemen)
+-- 4. Departments (master data departemen per PT)
 CREATE TABLE IF NOT EXISTS departments (
   id INT AUTO_INCREMENT PRIMARY KEY,
-  name VARCHAR(100) NOT NULL UNIQUE,
-  created_at TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP
+  name VARCHAR(100) NOT NULL,
+  company_id INT NULL,
+  created_at TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP,
+  CONSTRAINT fk_dept_company FOREIGN KEY (company_id)
+    REFERENCES companies(id) ON DELETE CASCADE,
+  UNIQUE KEY uk_comp_dept (company_id, name)
 ) ENGINE=InnoDB;
 
--- Data awal departemen
-INSERT IGNORE INTO departments (name) VALUES
-  ('Sales'), ('IT'), ('Drafter'), ('Human Capital'), ('Marketing');
+-- Data awal departemen default
+INSERT IGNORE INTO departments (name, company_id) VALUES
+  ('HR', 1), ('Engginer', 1), ('Sales', 1);
 
 -- Data awal: 1 titik kantor default (id 1)
 INSERT INTO office_settings (office_name, latitude, longitude, radius_meters, color)

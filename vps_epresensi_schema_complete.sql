@@ -33,8 +33,12 @@ CREATE TABLE companies (
 -- -----------------------------------------------------
 CREATE TABLE departments (
   id INT AUTO_INCREMENT PRIMARY KEY,
-  name VARCHAR(100) NOT NULL UNIQUE,
-  created_at TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP
+  name VARCHAR(100) NOT NULL,
+  company_id INT NULL,
+  created_at TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP,
+  CONSTRAINT fk_dept_company FOREIGN KEY (company_id)
+    REFERENCES companies(id) ON DELETE CASCADE,
+  UNIQUE KEY uk_comp_dept (company_id, name)
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
 
 -- -----------------------------------------------------
@@ -191,12 +195,10 @@ DELIMITER ;
 INSERT INTO companies (id, name) VALUES (1, 'PT SKMI');
 
 -- 2. Departemen Default
-INSERT INTO departments (name) VALUES
-  ('Sales'),
-  ('IT'),
-  ('Drafter'),
-  ('Human Capital'),
-  ('Marketing');
+INSERT INTO departments (name, company_id) VALUES
+  ('HR', 1),
+  ('Engginer', 1),
+  ('Sales', 1);
 
 -- 3. Akun Pengguna Awal (Semua Password: '123456')
 -- Hash bcrypt 10 rounds: $2a$10$uFuLQnv39f6v4fLUVRh4L.4WDGvPkasENgz6eVJ4V2BIP6GI3Vn9.

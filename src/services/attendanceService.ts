@@ -3,6 +3,7 @@ import {
   ApprovalStatus,
   AttendanceRecord,
   AttendanceType,
+  DepartmentItem,
   OfficeSettings,
   SessionType,
   UserProfile,
@@ -591,35 +592,117 @@ export class AttendanceService {
     } catch { return []; }
   }
 
-  static async getDepartments(): Promise<string[]> {
+  static async getDepartments(companyId?: string): Promise<string[]> {
     try {
-      const data = await apiFetch<{ departments: string[] }>('/departments');
+      const q = companyId ? `?company_id=${encodeURIComponent(companyId)}` : '';
+      const data = await apiFetch<{ departments: string[] }>(`/departments${q}`);
       if (Array.isArray(data?.departments) && data.departments.length > 0) {
         return data.departments;
       }
-      return ['Sales', 'IT', 'Drafter', 'Human Capital', 'Marketing'];
+      return ['HR', 'Engginer', 'Sales'];
     } catch {
-      return ['Sales', 'IT', 'Drafter', 'Human Capital', 'Marketing'];
+      return ['HR', 'Engginer', 'Sales'];
     }
   }
 
-  static async addDepartment(name: string): Promise<{ success: boolean; message: string; departments: string[] }> {
+  static async getDepartmentItems(companyId?: string): Promise<DepartmentItem[]> {
+    try {
+      const q = companyId ? `?company_id=${encodeURIComponent(companyId)}` : '';
+      const data = await apiFetch<{ items?: any[] }>(`/departments${q}`);
+      if (Array.isArray(data?.items)) {
+        return data.items.map((i) => ({
+          id: String(i.id),
+          name: String(i.name),
+          companyId: i.companyId != null ? String(i.companyId) : null,
+          employeeCount: Number(i.employeeCount) || 0,
+          createdAt: i.createdAt,
+        }));
+      }
+      return [];
+    } catch {
+      return [];
+    }
+  }
+
+  static async addDepartment(
+    name: string,
+    companyId?: string
+  ): Promise<{ success: boolean; message: string; departments: string[]; department?: DepartmentItem }> {
     const trimmed = name.trim();
     if (!trimmed) {
       return { success: false, message: 'Nama departemen tidak boleh kosong.', departments: [] };
     }
     try {
-      const data = await apiFetch<{ departments: string[]; added: string }>('/departments', {
+      const data = await apiFetch<{ departments: string[]; added: string; department?: any }>('/departments', {
         method: 'POST',
-        body: { name: trimmed },
+        body: { name: trimmed, companyId },
       });
       return {
         success: true,
         message: `Departemen ${trimmed} berhasil ditambahkan.`,
         departments: data.departments || [],
+        department: data.department
+          ? {
+              id: String(data.department.id),
+              name: String(data.department.name),
+              companyId: data.department.companyId != null ? String(data.department.companyId) : null,
+              employeeCount: Number(data.department.employeeCount) || 0,
+              createdAt: data.department.createdAt,
+            }
+          : undefined,
       };
     } catch (e: any) {
       return { success: false, message: e?.message || 'Gagal menambahkan departemen.', departments: [] };
+    }
+  }
+
+  static async updateDepartment(
+    id: string,
+    name: string
+  ): Promise<{ success: boolean; message: string }> {
+    const trimmed = name.trim();
+    if (!trimmed) {
+      return { success: false, message: 'Nama departemen tidak boleh kosong.' };
+    }
+    try {
+      const res = await apiFetch<{ ok: boolean; message?: string }>(`/departments/${id}`, {
+        method: 'PATCH',
+        body: { name: trimmed },
+      });
+      return { success: true, message: res.message || `Departemen berhasil diubah menjadi "${trimmed}".` };
+    } catch (e: any) {
+      return { success: false, message: e?.message || 'Gagal mengubah nama departemen.' };
+    }
+  }
+
+  static async reassignDepartment(
+    fromDepartment: string,
+    toDepartment: string,
+    companyId?: string
+  ): Promise<{ success: boolean; message: string; affectedRows?: number }> {
+    try {
+      const res = await apiFetch<{ ok: boolean; message: string; affectedRows: number }>('/departments/reassign', {
+        method: 'POST',
+        body: { fromDepartment, toDepartment, companyId },
+      });
+      return { success: true, message: res.message, affectedRows: res.affectedRows };
+    } catch (e: any) {
+      return { success: false, message: e?.message || 'Gagal memindahkan karyawan antar departemen.' };
+    }
+  }
+
+  static async deleteDepartment(
+    id: string,
+    reassignTo?: string
+  ): Promise<{ success: boolean; message: string }> {
+    try {
+      const q = reassignTo ? `?reassignTo=${encodeURIComponent(reassignTo)}` : '';
+      const res = await apiFetch<{ ok: boolean; message: string }>(`/departments/${id}${q}`, {
+        method: 'DELETE',
+      });
+      return { success: true, message: res.message || 'Departemen berhasil dihapus.' };
+    } catch (e: any) {
+      return { success: false, message: e?.message || 'Gagal menghapus departemen.' };
     }
   }
 

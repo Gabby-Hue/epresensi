@@ -137,6 +137,12 @@ app.post('/auth/register', async (req, res) => {
       if (!targetCompany) {
         const [cr] = await pool.query('INSERT INTO companies (name) VALUES (?)', ['PT SKMI']);
         targetCompany = cr.insertId;
+        try {
+          await pool.query(
+            'INSERT IGNORE INTO departments (name, company_id) VALUES (?, ?), (?, ?), (?, ?)',
+            ['HR', targetCompany, 'Engginer', targetCompany, 'Sales', targetCompany]
+          );
+        } catch {}
       }
     } else {
       const h = req.headers.authorization || '';
@@ -259,6 +265,15 @@ app.post('/companies', authRequired, superOnly, async (req, res) => {
   try {
     const [r] = await pool.query('INSERT INTO companies (name) VALUES (?)', [name]);
     const [[row]] = await pool.query('SELECT * FROM companies WHERE id=?', [r.insertId]);
+
+    // Seed default departments: HR, Engginer, Sales
+    try {
+      await pool.query(
+        'INSERT IGNORE INTO departments (name, company_id) VALUES (?, ?), (?, ?), (?, ?)',
+        ['HR', r.insertId, 'Engginer', r.insertId, 'Sales', r.insertId]
+      );
+    } catch {}
+
     res.status(201).json({ company: { id: row.id, name: row.name, createdAt: row.created_at } });
   } catch (e) {
     if (e.code === 'ER_DUP_ENTRY') return res.status(409).json({ error: 'PT ini sudah ada.' });
@@ -450,27 +465,254 @@ app.delete('/users/:id', authRequired, adminOnly, async (req, res) => {
 // ================= DEPARTMENTS =================
 app.get('/departments', authRequired, async (req, res) => {
   try {
-    const [rows] = await pool.query('SELECT name FROM departments ORDER BY name ASC');
-    const list = rows.map((r) => r.name);
-    res.json({ departments: list });
-  } catch {
-    const [uRows] = await pool.query('SELECT DISTINCT department FROM users WHERE department IS NOT NULL');
-    const set = new Set(['Sales', 'IT', 'Drafter', 'Human Capital', 'Marketing']);
-    uRows.forEach((r) => r.department && set.add(r.department));
-    res.json({ departments: Array.from(set) });
+    const { companyId, isSuper } = await requesterCompany(req);
+    let targetCompany = !isSuper ? companyId : (req.query.company_id ? Number(req.query.company_id) : companyId);
+    if (!targetCompany) {
+      const [[firstCo]] = await pool.query('SELECT id FROM companies ORDER BY id LIMIT 1');
+      targetCompany = firstCo ? firstCo.id : 1;
+    }
+
+    // Auto seed jika belum ada departemen untuk cabang ini
+    const [[cnt]] = await pool.query('SELECT COUNT(*) AS n FROM departments WHERE company_id = ?', [targetCompany]);
+    if (cnt.n === 0) {
+      await pool.query(
+        'INSERT IGNORE INTO departments (name, company_id) VALUES (?, ?), (?, ?), (?, ?)',
+        ['HR', targetCompany, 'Engginer', targetCompany, 'Sales', targetCompany]
+      );
+    }
+
+    const [rows] = await pool.query(
+      `SELECT d.id, d.name, d.company_id, d.created_at,
+              COUNT(u.id) AS employee_count
+       FROM departments d
+       LEFT JOIN users u ON u.company_id = d.company_id AND u.department = d.name AND u.role = 'employee'
+       WHERE d.company_id = ?
+       GROUP BY d.id
+       ORDER BY d.name ASC`,
+      [targetCompany]
+    );
+
+    const items = rows.map((r) => ({
+      id: String(r.id),
+      name: r.name,
+      companyId: r.company_id != null ? String(r.company_id) : null,
+      employeeCount: Number(r.employee_count) || 0,
+      createdAt: r.created_at,
+    }));
+
+    const list = items.map((i) => i.name);
+    res.json({ departments: list, items });
+  } catch (e) {
+    res.status(500).json({ error: e.message });
   }
 });
 
 app.post('/departments', authRequired, adminOnly, async (req, res) => {
   try {
-    const { name } = req.body || {};
-    const trimmed = String(name || '').trim();
-    if (!trimmed) {
-      return res.status(400).json({ error: 'Nama departemen tidak boleh kosong.' });
+    const { companyId, isSuper } = await requesterCompany(req);
+    const targetCompany = !isSuper ? companyId : (req.body?.companyId ? Number(req.body.companyId) : companyId);
+    if (!targetCompany) return res.status(400).json({ error: 'PT / Cabang tidak valid.' });
+
+    const name = String(req.body?.name || '').trim();
+    if (!name) return res.status(400).json({ error: 'Nama departemen tidak boleh kosong.' });
+
+    const [[existing]] = await pool.query(
+      'SELECT id FROM departments WHERE company_id = ? AND LOWER(name) = LOWER(?)',
+      [targetCompany, name]
+    );
+    if (existing) {
+      return res.status(409).json({ error: `Departemen "${name}" sudah ada di cabang ini.` });
     }
-    await pool.query('INSERT IGNORE INTO departments (name) VALUES (?)', [trimmed]);
-    const [rows] = await pool.query('SELECT name FROM departments ORDER BY name ASC');
-    res.status(201).json({ departments: rows.map((r) => r.name), added: trimmed });
+
+    const [r] = await pool.query(
+      'INSERT INTO departments (name, company_id) VALUES (?, ?)',
+      [name, targetCompany]
+    );
+
+    const [[created]] = await pool.query('SELECT * FROM departments WHERE id = ?', [r.insertId]);
+
+    const [[me]] = await pool.query('SELECT * FROM users WHERE id = ?', [req.auth.id]);
+    void logActivity(
+      req.auth.id,
+      me ? me.full_name : 'Admin',
+      req.auth.role,
+      targetCompany,
+      'create_department',
+      `Menambah departemen baru: ${name}`
+    );
+
+    const item = {
+      id: String(created.id),
+      name: created.name,
+      companyId: String(created.company_id),
+      employeeCount: 0,
+      createdAt: created.created_at,
+    };
+
+    const [allRows] = await pool.query('SELECT name FROM departments WHERE company_id = ? ORDER BY name ASC', [targetCompany]);
+
+    res.status(201).json({
+      ok: true,
+      message: `Departemen "${name}" berhasil ditambahkan.`,
+      department: item,
+      departments: allRows.map((r) => r.name),
+    });
+  } catch (e) {
+    res.status(500).json({ error: e.message });
+  }
+});
+
+app.patch('/departments/:id', authRequired, adminOnly, async (req, res) => {
+  try {
+    const { companyId, isSuper } = await requesterCompany(req);
+    const [[dept]] = await pool.query('SELECT * FROM departments WHERE id = ?', [req.params.id]);
+    if (!dept) return res.status(404).json({ error: 'Departemen tidak ditemukan.' });
+    if (!isSuper && dept.company_id !== companyId) {
+      return res.status(403).json({ error: 'Departemen ini milik cabang lain.' });
+    }
+
+    const newName = String(req.body?.name || '').trim();
+    if (!newName) return res.status(400).json({ error: 'Nama baru departemen wajib diisi.' });
+
+    const oldName = dept.name;
+    if (oldName.toLowerCase() !== newName.toLowerCase()) {
+      const [[dup]] = await pool.query(
+        'SELECT id FROM departments WHERE company_id = ? AND LOWER(name) = LOWER(?) AND id != ?',
+        [dept.company_id, newName, dept.id]
+      );
+      if (dup) return res.status(409).json({ error: `Departemen "${newName}" sudah ada.` });
+    }
+
+    await pool.query('UPDATE departments SET name = ? WHERE id = ?', [newName, dept.id]);
+
+    // Cascade update seluruh user dengan departemen lama
+    const [uRes] = await pool.query(
+      'UPDATE users SET department = ? WHERE company_id = ? AND department = ?',
+      [newName, dept.company_id, oldName]
+    );
+
+    const [[me]] = await pool.query('SELECT * FROM users WHERE id = ?', [req.auth.id]);
+    void logActivity(
+      req.auth.id,
+      me ? me.full_name : 'Admin',
+      req.auth.role,
+      dept.company_id,
+      'rename_department',
+      `Mengubah nama departemen dari "${oldName}" menjadi "${newName}" (${uRes.affectedRows} karyawan terupdate)`
+    );
+
+    res.json({
+      ok: true,
+      message: `Departemen berhasil diubah menjadi "${newName}".`,
+      department: { id: String(dept.id), name: newName, companyId: String(dept.company_id) },
+    });
+  } catch (e) {
+    res.status(500).json({ error: e.message });
+  }
+});
+
+app.post('/departments/reassign', authRequired, adminOnly, async (req, res) => {
+  try {
+    const { companyId, isSuper } = await requesterCompany(req);
+    const targetCompany = !isSuper ? companyId : (req.body?.companyId ? Number(req.body.companyId) : companyId);
+    const fromDept = String(req.body?.fromDepartment || req.body?.from || '').trim();
+    const toDept = String(req.body?.toDepartment || req.body?.to || '').trim();
+
+    if (!fromDept || !toDept) {
+      return res.status(400).json({ error: 'Departemen asal dan tujuan wajib diisi.' });
+    }
+    if (fromDept.toLowerCase() === toDept.toLowerCase()) {
+      return res.status(400).json({ error: 'Departemen tujuan harus berbeda dari asal.' });
+    }
+
+    const [[targetExists]] = await pool.query(
+      'SELECT id, name FROM departments WHERE company_id = ? AND LOWER(name) = LOWER(?)',
+      [targetCompany, toDept]
+    );
+    if (!targetExists) {
+      return res.status(404).json({ error: `Departemen tujuan "${toDept}" tidak ditemukan.` });
+    }
+
+    const [r] = await pool.query(
+      'UPDATE users SET department = ? WHERE company_id = ? AND department = ? AND role = "employee"',
+      [targetExists.name, targetCompany, fromDept]
+    );
+
+    const [[me]] = await pool.query('SELECT * FROM users WHERE id = ?', [req.auth.id]);
+    void logActivity(
+      req.auth.id,
+      me ? me.full_name : 'Admin',
+      req.auth.role,
+      targetCompany,
+      'reassign_department',
+      `Memindahkan ${r.affectedRows} karyawan dari "${fromDept}" ke "${targetExists.name}"`
+    );
+
+    res.json({
+      ok: true,
+      message: `Berhasil memindahkan ${r.affectedRows} karyawan dari "${fromDept}" ke "${targetExists.name}".`,
+      affectedRows: r.affectedRows,
+    });
+  } catch (e) {
+    res.status(500).json({ error: e.message });
+  }
+});
+
+app.delete('/departments/:id', authRequired, adminOnly, async (req, res) => {
+  try {
+    const { companyId, isSuper } = await requesterCompany(req);
+    const [[dept]] = await pool.query('SELECT * FROM departments WHERE id = ?', [req.params.id]);
+    if (!dept) return res.status(404).json({ error: 'Departemen tidak ditemukan.' });
+    if (!isSuper && dept.company_id !== companyId) {
+      return res.status(403).json({ error: 'Departemen ini milik cabang lain.' });
+    }
+
+    // Cek apakah masih ada karyawan di departemen ini
+    const [[empCount]] = await pool.query(
+      'SELECT COUNT(*) AS n FROM users WHERE company_id = ? AND department = ? AND role = "employee"',
+      [dept.company_id, dept.name]
+    );
+
+    const reassignTo = String(req.query?.reassignTo || req.body?.reassignTo || '').trim();
+
+    if (empCount.n > 0) {
+      if (!reassignTo) {
+        return res.status(400).json({
+          error: `Departemen "${dept.name}" masih memiliki ${empCount.n} karyawan aktif. Pindahkan (reassign) karyawan ke departemen lain terlebih dahulu sebelum menghapus.`,
+          employeeCount: empCount.n,
+        });
+      }
+
+      const [[targetExists]] = await pool.query(
+        'SELECT id, name FROM departments WHERE company_id = ? AND LOWER(name) = LOWER(?) AND id != ?',
+        [dept.company_id, reassignTo, dept.id]
+      );
+      if (!targetExists) {
+        return res.status(400).json({ error: `Departemen tujuan "${reassignTo}" tidak valid.` });
+      }
+
+      await pool.query(
+        'UPDATE users SET department = ? WHERE company_id = ? AND department = ? AND role = "employee"',
+        [targetExists.name, dept.company_id, dept.name]
+      );
+    }
+
+    await pool.query('DELETE FROM departments WHERE id = ?', [dept.id]);
+
+    const [[me]] = await pool.query('SELECT * FROM users WHERE id = ?', [req.auth.id]);
+    void logActivity(
+      req.auth.id,
+      me ? me.full_name : 'Admin',
+      req.auth.role,
+      dept.company_id,
+      'delete_department',
+      `Menghapus departemen: "${dept.name}"`
+    );
+
+    res.json({
+      ok: true,
+      message: `Departemen "${dept.name}" berhasil dihapus.${empCount.n > 0 ? ` ${empCount.n} karyawan telah dipindahkan ke "${reassignTo}".` : ''}`,
+    });
   } catch (e) {
     res.status(500).json({ error: e.message });
   }
@@ -492,7 +734,7 @@ app.get('/offices', authRequired, async (req, res) => {
   res.json({ offices: rows.map(publicOffice) });
 });
 
-// Auto-migration kolom jam kerja kantor & plain_password jika belum ada
+// Auto-migration kolom jam kerja kantor & plain_password & departments jika belum ada
 (async () => {
   try {
     await pool.query("ALTER TABLE office_settings ADD COLUMN IF NOT EXISTS work_start_time VARCHAR(8) DEFAULT '08:00'");
@@ -501,6 +743,20 @@ app.get('/offices', authRequired, async (req, res) => {
     await pool.query("ALTER TABLE office_settings ADD COLUMN IF NOT EXISTS address TEXT NULL");
     await pool.query("ALTER TABLE users ADD COLUMN IF NOT EXISTS plain_password VARCHAR(255) NULL");
     await pool.query("UPDATE users SET plain_password='123456' WHERE plain_password IS NULL");
+    await pool.query("ALTER TABLE departments ADD COLUMN IF NOT EXISTS company_id INT NULL");
+    await pool.query("UPDATE departments SET company_id = 1 WHERE company_id IS NULL");
+    try { await pool.query("ALTER TABLE departments DROP INDEX name"); } catch {}
+    try { await pool.query("ALTER TABLE departments ADD UNIQUE KEY uk_comp_dept (company_id, name)"); } catch {}
+    const [comps] = await pool.query("SELECT id FROM companies");
+    for (const c of comps) {
+      const [[cnt]] = await pool.query("SELECT COUNT(*) AS n FROM departments WHERE company_id = ?", [c.id]);
+      if (cnt.n === 0) {
+        await pool.query(
+          "INSERT IGNORE INTO departments (name, company_id) VALUES (?, ?), (?, ?), (?, ?)",
+          ['HR', c.id, 'Engginer', c.id, 'Sales', c.id]
+        );
+      }
+    }
   } catch (e) {
     // MariaDB/MySQL tanpa support IF NOT EXISTS bisa diabaikan
   }
