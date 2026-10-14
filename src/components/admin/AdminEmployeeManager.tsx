@@ -1,5 +1,6 @@
 import React, { useEffect, useState } from 'react';
 import {
+  Platform,
   StyleSheet,
   Text,
   TextInput,
@@ -48,6 +49,9 @@ export const AdminEmployeeManager: React.FC<AdminEmployeeManagerProps> = ({
   const [editing, setEditing] = useState<UserProfile | null>(null);
   const [editName, setEditName] = useState('');
   const [editDept, setEditDept] = useState('');
+  const [editPassword, setEditPassword] = useState('');
+  const [showEditPassword, setShowEditPassword] = useState(false);
+  const [revealedPasswords, setRevealedPasswords] = useState<Record<string, boolean>>({});
   const [editSaving, setEditSaving] = useState(false);
   const [editError, setEditError] = useState<string | null>(null);
   const [deletingId, setDeletingId] = useState<string | null>(null);
@@ -59,6 +63,11 @@ export const AdminEmployeeManager: React.FC<AdminEmployeeManagerProps> = ({
     message: string;
     variant: 'primary' | 'danger';
   } | null>(null);
+
+  const toggleRevealPassword = (userId: string) => {
+    select();
+    setRevealedPasswords((prev) => ({ ...prev, [userId]: !prev[userId] }));
+  };
 
   const handleCreateAccount = async () => {
     setFormError(null);
@@ -104,6 +113,8 @@ export const AdminEmployeeManager: React.FC<AdminEmployeeManagerProps> = ({
     setEditing(item);
     setEditName(item.fullName);
     setEditDept(item.department || '');
+    setEditPassword('');
+    setShowEditPassword(false);
     setEditError(null);
   };
 
@@ -114,11 +125,16 @@ export const AdminEmployeeManager: React.FC<AdminEmployeeManagerProps> = ({
       setEditError('Nama tidak boleh kosong.');
       return;
     }
+    if (editPassword && editPassword.length < 6) {
+      setEditError('Kata sandi baru minimal 6 karakter.');
+      return;
+    }
     setEditSaving(true);
     const { success, message } = await AttendanceService.updateEmployeeAccount({
       id: editing.id,
       fullName: editName.trim(),
       department: editDept.trim() || 'General',
+      password: editPassword.trim() || undefined,
     });
     setEditSaving(false);
     if (!success) {
@@ -128,6 +144,7 @@ export const AdminEmployeeManager: React.FC<AdminEmployeeManagerProps> = ({
     }
     succeed();
     setEditing(null);
+    setEditPassword('');
     setFeedbackModal({
       title: 'Berhasil',
       message,
@@ -235,7 +252,7 @@ export const AdminEmployeeManager: React.FC<AdminEmployeeManagerProps> = ({
         </View>
         <View style={styles.formGroup}>
           <Text style={styles.label}>Kata sandi</Text>
-          <View style={styles.passwordRow}>
+          <View style={styles.createPasswordRow}>
             <TextInput
               style={styles.passwordInput}
               placeholder="Minimal 6 karakter"
@@ -244,7 +261,7 @@ export const AdminEmployeeManager: React.FC<AdminEmployeeManagerProps> = ({
               onChangeText={setPassword}
               secureTextEntry={!showPassword}
             />
-            <TouchableOpacity onPress={() => setShowPassword((v) => !v)} style={styles.eyeBtn} hitSlop={12}>
+            <TouchableOpacity onPress={() => setShowPassword((v) => !v)} style={styles.createEyeBtn} hitSlop={12}>
               <Feather name={showPassword ? 'eye-off' : 'eye'} size={20} color={colors.muted} />
             </TouchableOpacity>
           </View>
@@ -278,6 +295,23 @@ export const AdminEmployeeManager: React.FC<AdminEmployeeManagerProps> = ({
                 <Text style={styles.userName}>{item.fullName}</Text>
                 <Text style={styles.userEmail}>{item.email}</Text>
                 <Text style={styles.userEmail}>{item.department || 'Staff'}</Text>
+                <View style={styles.passwordRow}>
+                  <Text style={styles.passwordLabel}>Sandi: </Text>
+                  <Text style={styles.passwordVal}>
+                    {revealedPasswords[item.id] ? (item.plainPassword || '123456') : '••••••••'}
+                  </Text>
+                  <TouchableOpacity
+                    onPress={() => toggleRevealPassword(item.id)}
+                    hitSlop={8}
+                    style={{ marginLeft: 6 }}
+                  >
+                    <Feather
+                      name={revealedPasswords[item.id] ? 'eye-off' : 'eye'}
+                      size={14}
+                      color={colors.primary}
+                    />
+                  </TouchableOpacity>
+                </View>
                 <Text style={styles.deviceText}>
                   {item.deviceModel || item.deviceId
                     ? `Terkunci: ${item.deviceModel || item.deviceId}`
@@ -340,6 +374,25 @@ export const AdminEmployeeManager: React.FC<AdminEmployeeManagerProps> = ({
           onDepartmentsChange={setDepartments}
           placeholder="Pilih departemen"
         />
+        <Text style={[styles.label, { marginTop: 12 }]}>Ganti Kata Sandi (Opsional)</Text>
+        <View style={styles.passwordWrap}>
+          <TextInput
+            style={[styles.input, { flex: 1 }]}
+            value={editPassword}
+            onChangeText={setEditPassword}
+            placeholder="Biarkan kosong jika tidak diubah"
+            placeholderTextColor={colors.faint}
+            secureTextEntry={!showEditPassword}
+          />
+          <TouchableOpacity
+            style={styles.eyeBtn}
+            onPress={() => setShowEditPassword(!showEditPassword)}
+            hitSlop={8}
+          >
+            <Feather name={showEditPassword ? 'eye-off' : 'eye'} size={18} color={colors.muted} />
+          </TouchableOpacity>
+        </View>
+        <Text style={styles.hint}>Minimal 6 karakter jika ingin mengganti sandi karyawan ini.</Text>
         <Button
           title={editSaving ? 'Menyimpan...' : 'Simpan perubahan'}
           icon="check"
@@ -426,7 +479,7 @@ const styles = StyleSheet.create({
     color: colors.ink,
     minHeight: 56,
   },
-  passwordRow: {
+  createPasswordRow: {
     flexDirection: 'row',
     alignItems: 'center',
     backgroundColor: colors.surface,
@@ -442,7 +495,7 @@ const styles = StyleSheet.create({
     fontSize: fontSize.sm,
     color: colors.ink,
   },
-  eyeBtn: {
+  createEyeBtn: {
     padding: 10,
   },
   errorBox: {
@@ -499,6 +552,34 @@ const styles = StyleSheet.create({
   userEmail: {
     fontSize: fontSize.xs,
     color: colors.muted,
+  },
+  passwordRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    marginTop: 2,
+  },
+  passwordLabel: {
+    fontSize: 11,
+    color: colors.muted,
+    fontWeight: '600',
+  },
+  passwordVal: {
+    fontSize: 12,
+    color: colors.ink,
+    fontWeight: '700',
+    fontFamily: Platform.OS === 'ios' ? 'Courier' : 'monospace',
+  },
+  passwordWrap: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    position: 'relative',
+  },
+  eyeBtn: {
+    position: 'absolute',
+    right: 12,
+    height: '100%',
+    justifyContent: 'center',
+    alignItems: 'center',
   },
   deviceText: {
     fontSize: 11,

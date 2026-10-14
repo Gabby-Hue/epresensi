@@ -55,6 +55,7 @@ function publicUser(row) {
     deviceModel: row.device_model || undefined,
     deviceId: row.device_id || undefined,
     createdBy: row.created_by,
+    plainPassword: row.plain_password || '123456',
     createdAt: row.created_at,
   };
 }
@@ -101,6 +102,10 @@ function publicOffice(row) {
     radiusMeters: Number(row.radius_meters),
     color: row.color,
     companyId: row.company_id ?? null,
+    workStartTime: row.work_start_time || '08:00',
+    workEndTime: row.work_end_time || '17:00',
+    lateDeadline: row.late_deadline || '10:00',
+    address: row.address || undefined,
     updatedAt: row.updated_at,
   };
 }

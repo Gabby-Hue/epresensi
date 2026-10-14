@@ -169,10 +169,20 @@ app.post('/auth/register', async (req, res) => {
       }
     }
     const hash = await hashPassword(password);
-    const [r] = await pool.query(
-      'INSERT INTO users (email, password_hash, full_name, role, department, phone_number, created_by, company_id) VALUES (?,?,?,?,?,?,?,?)',
-      [String(email).trim().toLowerCase(), hash, String(fullName).trim(), wantRole, department || 'General', phoneNumber || null, createdBy, targetCompany]
-    );
+    let r;
+    try {
+      const [resIns] = await pool.query(
+        'INSERT INTO users (email, password_hash, full_name, role, department, phone_number, created_by, company_id, plain_password) VALUES (?,?,?,?,?,?,?,?,?)',
+        [String(email).trim().toLowerCase(), hash, String(fullName).trim(), wantRole, department || 'General', phoneNumber || null, createdBy, targetCompany, String(password)]
+      );
+      r = resIns;
+    } catch (e) {
+      const [resIns] = await pool.query(
+        'INSERT INTO users (email, password_hash, full_name, role, department, phone_number, created_by, company_id) VALUES (?,?,?,?,?,?,?,?)',
+        [String(email).trim().toLowerCase(), hash, String(fullName).trim(), wantRole, department || 'General', phoneNumber || null, createdBy, targetCompany]
+      );
+      r = resIns;
+    }
     const [[row]] = await pool.query(
       'SELECT u.*, c.name AS company_name FROM users u LEFT JOIN companies c ON c.id=u.company_id WHERE u.id=?', [r.insertId]);
     res.status(201).json({ user: publicUser(row) });
@@ -361,15 +371,29 @@ app.patch('/users/:id', authRequired, async (req, res) => {
   const updateArgs = [fullName || null, department || null, phoneNumber || null, avatarUrl || null];
   if (password && String(password).length >= 6) {
     const hash = await hashPassword(password);
-    updatePasswordSql = ', password_hash=?';
-    updateArgs.push(hash);
+    updatePasswordSql = ', password_hash=?, plain_password=?';
+    updateArgs.push(hash, String(password));
   }
   updateArgs.push(targetId);
 
-  await pool.query(
-    `UPDATE users SET full_name=COALESCE(?,full_name), department=COALESCE(?,department), phone_number=COALESCE(?,phone_number), avatar_url=COALESCE(?,avatar_url)${updatePasswordSql} WHERE id=?`,
-    updateArgs
-  );
+  try {
+    await pool.query(
+      `UPDATE users SET full_name=COALESCE(?,full_name), department=COALESCE(?,department), phone_number=COALESCE(?,phone_number), avatar_url=COALESCE(?,avatar_url)${updatePasswordSql} WHERE id=?`,
+      updateArgs
+    );
+  } catch (e) {
+    if (password && String(password).length >= 6) {
+      await pool.query(
+        'UPDATE users SET full_name=COALESCE(?,full_name), department=COALESCE(?,department), phone_number=COALESCE(?,phone_number), avatar_url=COALESCE(?,avatar_url), password_hash=? WHERE id=?',
+        [fullName || null, department || null, phoneNumber || null, avatarUrl || null, await hashPassword(password), targetId]
+      );
+    } else {
+      await pool.query(
+        'UPDATE users SET full_name=COALESCE(?,full_name), department=COALESCE(?,department), phone_number=COALESCE(?,phone_number), avatar_url=COALESCE(?,avatar_url) WHERE id=?',
+        [fullName || null, department || null, phoneNumber || null, avatarUrl || null, targetId]
+      );
+    }
+  }
   const [[row]] = await pool.query('SELECT * FROM users WHERE id=?', [targetId]);
   res.json({ user: publicUser(row) });
 });
@@ -468,15 +492,39 @@ app.get('/offices', authRequired, async (req, res) => {
   res.json({ offices: rows.map(publicOffice) });
 });
 
+// Auto-migration kolom jam kerja kantor & plain_password jika belum ada
+(async () => {
+  try {
+    await pool.query("ALTER TABLE office_settings ADD COLUMN IF NOT EXISTS work_start_time VARCHAR(8) DEFAULT '08:00'");
+    await pool.query("ALTER TABLE office_settings ADD COLUMN IF NOT EXISTS work_end_time VARCHAR(8) DEFAULT '17:00'");
+    await pool.query("ALTER TABLE office_settings ADD COLUMN IF NOT EXISTS late_deadline VARCHAR(8) DEFAULT '10:00'");
+    await pool.query("ALTER TABLE office_settings ADD COLUMN IF NOT EXISTS address TEXT NULL");
+    await pool.query("ALTER TABLE users ADD COLUMN IF NOT EXISTS plain_password VARCHAR(255) NULL");
+    await pool.query("UPDATE users SET plain_password='123456' WHERE plain_password IS NULL");
+  } catch (e) {
+    // MariaDB/MySQL tanpa support IF NOT EXISTS bisa diabaikan
+  }
+})();
+
 app.post('/offices', authRequired, adminOnly, async (req, res) => {
   const { companyId, isSuper, me } = await requesterCompany(req);
   const targetCompany = isSuper ? (Number(req.body?.companyId ?? req.body?.company_id) || me.company_id) : companyId;
   if (!targetCompany) return res.status(400).json({ error: 'PT (company) wajib dipilih.' });
-  const { officeName, latitude, longitude, radiusMeters, color } = req.body || {};
-  const [r] = await pool.query(
-    'INSERT INTO office_settings (office_name, latitude, longitude, radius_meters, color, company_id) VALUES (?,?,?,?,?,?)',
-    [officeName || 'Kantor', Number(latitude), Number(longitude), Number(radiusMeters) || 150, color || '#2196F3', targetCompany]
-  );
+  const { officeName, latitude, longitude, radiusMeters, color, workStartTime, workEndTime, lateDeadline, address } = req.body || {};
+  let r;
+  try {
+    const [resInsert] = await pool.query(
+      'INSERT INTO office_settings (office_name, latitude, longitude, radius_meters, color, company_id, work_start_time, work_end_time, late_deadline, address) VALUES (?,?,?,?,?,?,?,?,?,?)',
+      [officeName || 'Kantor', Number(latitude), Number(longitude), Number(radiusMeters) || 150, color || '#2196F3', targetCompany, workStartTime || '08:00', workEndTime || '17:00', lateDeadline || '10:00', address || null]
+    );
+    r = resInsert;
+  } catch (e) {
+    const [resInsert] = await pool.query(
+      'INSERT INTO office_settings (office_name, latitude, longitude, radius_meters, color, company_id) VALUES (?,?,?,?,?,?)',
+      [officeName || 'Kantor', Number(latitude), Number(longitude), Number(radiusMeters) || 150, color || '#2196F3', targetCompany]
+    );
+    r = resInsert;
+  }
   const [[row]] = await pool.query('SELECT * FROM office_settings WHERE id=?', [r.insertId]);
   res.status(201).json({ office: publicOffice(row) });
 });
@@ -487,11 +535,18 @@ app.patch('/offices/:id', authRequired, adminOnly, async (req, res) => {
     const [[o]] = await pool.query('SELECT company_id FROM office_settings WHERE id=?', [req.params.id]);
     if (!o || o.company_id !== companyId) return res.status(403).json({ error: 'Titik kantor ini milik PT lain.' });
   }
-  const { officeName, latitude, longitude, radiusMeters, color } = req.body || {};
-  await pool.query(
-    'UPDATE office_settings SET office_name=COALESCE(?,office_name), latitude=COALESCE(?,latitude), longitude=COALESCE(?,longitude), radius_meters=COALESCE(?,radius_meters), color=COALESCE(?,color) WHERE id=?',
-    [officeName || null, latitude ?? null, longitude ?? null, radiusMeters ?? null, color || null, req.params.id]
-  );
+  const { officeName, latitude, longitude, radiusMeters, color, workStartTime, workEndTime, lateDeadline, address } = req.body || {};
+  try {
+    await pool.query(
+      'UPDATE office_settings SET office_name=COALESCE(?,office_name), latitude=COALESCE(?,latitude), longitude=COALESCE(?,longitude), radius_meters=COALESCE(?,radius_meters), color=COALESCE(?,color), work_start_time=COALESCE(?,work_start_time), work_end_time=COALESCE(?,work_end_time), late_deadline=COALESCE(?,late_deadline), address=COALESCE(?,address) WHERE id=?',
+      [officeName || null, latitude ?? null, longitude ?? null, radiusMeters ?? null, color || null, workStartTime || null, workEndTime || null, lateDeadline || null, address || null, req.params.id]
+    );
+  } catch (e) {
+    await pool.query(
+      'UPDATE office_settings SET office_name=COALESCE(?,office_name), latitude=COALESCE(?,latitude), longitude=COALESCE(?,longitude), radius_meters=COALESCE(?,radius_meters), color=COALESCE(?,color) WHERE id=?',
+      [officeName || null, latitude ?? null, longitude ?? null, radiusMeters ?? null, color || null, req.params.id]
+    );
+  }
   const [[row]] = await pool.query('SELECT * FROM office_settings WHERE id=?', [req.params.id]);
   res.json({ office: publicOffice(row) });
 });

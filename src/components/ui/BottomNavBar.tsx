@@ -103,10 +103,10 @@ const styles = StyleSheet.create({
   },
   navRow: {
     flexDirection: 'row',
-    height: 56,
+    height: 58,
     alignItems: 'center',
     justifyContent: 'space-around',
-    paddingHorizontal: 8,
+    paddingHorizontal: 4,
     paddingTop: 4,
   },
   tabButton: {
@@ -116,24 +116,24 @@ const styles = StyleSheet.create({
     justifyContent: 'center',
   },
   tabContent: {
-    flexDirection: 'row',
+    flexDirection: 'column',
     alignItems: 'center',
     justifyContent: 'center',
-    paddingVertical: 6,
-    paddingHorizontal: 12,
+    paddingVertical: 4,
+    paddingHorizontal: 10,
     borderRadius: radius.md,
-    gap: 6,
+    gap: 2,
   },
   tabContentActive: {
     backgroundColor: colors.primarySoft,
   },
   tabLabel: {
-    fontSize: 12,
+    fontSize: 11,
     fontWeight: '500',
     color: colors.muted,
   },
   tabLabelActive: {
-    color: colors.primary,
+    color: colors.primaryDark,
     fontWeight: '700',
   },
 });

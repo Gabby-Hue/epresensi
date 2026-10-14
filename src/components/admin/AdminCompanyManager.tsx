@@ -1,5 +1,5 @@
 import React, { useEffect, useState } from 'react';
-import { StyleSheet, Text, TextInput, TouchableOpacity, View } from 'react-native';
+import { Platform, StyleSheet, Text, TextInput, TouchableOpacity, View } from 'react-native';
 import { AttendanceService } from '../../services/attendanceService';
 import { UserProfile } from '../../types/attendance';
 import { Card } from '../ui/Card';
@@ -38,7 +38,14 @@ export const AdminCompanyManager: React.FC<AdminCompanyManagerProps> = ({
   // Reset password admin
   const [resetAdminTarget, setResetAdminTarget] = useState<UserProfile | null>(null);
   const [newPassword, setNewPassword] = useState('');
+  const [showNewPassword, setShowNewPassword] = useState(false);
+  const [revealedPasswords, setRevealedPasswords] = useState<Record<string, boolean>>({});
   const [resetSaving, setResetSaving] = useState(false);
+
+  const toggleRevealPassword = (adminId: string) => {
+    select();
+    setRevealedPasswords((prev) => ({ ...prev, [adminId]: !prev[adminId] }));
+  };
 
   // Hapus PT dialog
   const [deleteCompanyTarget, setDeleteCompanyTarget] = useState<{ id: string; name: string } | null>(null);
@@ -285,6 +292,23 @@ export const AdminCompanyManager: React.FC<AdminCompanyManagerProps> = ({
                   {isMe && <Text style={styles.meBadge}>Anda</Text>}
                 </View>
                 <Text style={styles.rowEmail}>{a.email}</Text>
+                <View style={styles.passwordRow}>
+                  <Text style={styles.passwordLabel}>Sandi: </Text>
+                  <Text style={styles.passwordVal}>
+                    {revealedPasswords[a.id] ? (a.plainPassword || '123456') : '••••••••'}
+                  </Text>
+                  <TouchableOpacity
+                    onPress={() => toggleRevealPassword(a.id)}
+                    hitSlop={8}
+                    style={{ marginLeft: 6 }}
+                  >
+                    <Feather
+                      name={revealedPasswords[a.id] ? 'eye-off' : 'eye'}
+                      size={14}
+                      color={colors.primary}
+                    />
+                  </TouchableOpacity>
+                </View>
                 <Text style={styles.rowSub}>
                   {a.role === 'superadmin' ? 'Superadmin Pusat' : 'Admin Cabang'} • {a.companyName || 'Holding'}
                 </Text>
@@ -298,10 +322,11 @@ export const AdminCompanyManager: React.FC<AdminCompanyManagerProps> = ({
                       select();
                       setResetAdminTarget(a);
                       setNewPassword('');
+                      setShowNewPassword(false);
                     }}
                     hitSlop={10}
                   >
-                    <Feather name="key" size={16} color={colors.primary} />
+                    <Feather name="edit-2" size={16} color={colors.primary} />
                   </TouchableOpacity>
                   <TouchableOpacity
                     style={styles.actionIconBtnDanger}
@@ -326,14 +351,23 @@ export const AdminCompanyManager: React.FC<AdminCompanyManagerProps> = ({
           <View style={styles.modalCard}>
             <Text style={styles.modalTitle}>Ganti Kata Sandi Admin</Text>
             <Text style={styles.modalSub}>Atur ulang sandi login untuk {resetAdminTarget.fullName} ({resetAdminTarget.email}).</Text>
-            <TextInput
-              style={[styles.input, { marginTop: 12 }]}
-              placeholder="Kata sandi baru (minimal 6 karakter)"
-              placeholderTextColor={colors.faint}
-              value={newPassword}
-              onChangeText={setNewPassword}
-              secureTextEntry
-            />
+            <View style={styles.passwordWrap}>
+              <TextInput
+                style={[styles.input, { marginTop: 12, flex: 1 }]}
+                placeholder="Kata sandi baru (minimal 6 karakter)"
+                placeholderTextColor={colors.faint}
+                value={newPassword}
+                onChangeText={setNewPassword}
+                secureTextEntry={!showNewPassword}
+              />
+              <TouchableOpacity
+                style={styles.eyeBtn}
+                onPress={() => setShowNewPassword(!showNewPassword)}
+                hitSlop={8}
+              >
+                <Feather name={showNewPassword ? 'eye-off' : 'eye'} size={18} color={colors.muted} />
+              </TouchableOpacity>
+            </View>
             <View style={{ flexDirection: 'row', gap: 10, marginTop: 14 }}>
               <Button title="Batal" variant="outline" onPress={() => setResetAdminTarget(null)} style={{ flex: 1 }} />
               <Button
@@ -503,4 +537,33 @@ const styles = StyleSheet.create({
   },
   modalTitle: { fontSize: fontSize.md, fontWeight: '800', color: colors.ink },
   modalSub: { fontSize: fontSize.xs, color: colors.muted, marginTop: 4 },
+  passwordRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    marginTop: 2,
+  },
+  passwordLabel: {
+    fontSize: 11,
+    color: colors.muted,
+    fontWeight: '600',
+  },
+  passwordVal: {
+    fontSize: 12,
+    color: colors.ink,
+    fontWeight: '700',
+    fontFamily: Platform.OS === 'ios' ? 'Courier' : 'monospace',
+  },
+  passwordWrap: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    position: 'relative',
+    marginTop: 12,
+  },
+  eyeBtn: {
+    position: 'absolute',
+    right: 12,
+    height: '100%',
+    justifyContent: 'center',
+    alignItems: 'center',
+  },
 });

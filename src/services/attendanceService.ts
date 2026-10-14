@@ -44,6 +44,7 @@ function mapUser(u: any): UserProfile {
     phoneNumber: u.phoneNumber ?? undefined,
     deviceModel: u.deviceModel ?? undefined,
     deviceId: u.deviceId ?? undefined,
+    plainPassword: u.plainPassword || '123456',
   };
 }
 
@@ -56,7 +57,11 @@ function mapOffice(o: any): OfficeSettings {
     radiusMeters: Number(o.radiusMeters),
     color: isHexColor(o.color) ? o.color : '#2196F3',
     companyId: o.companyId != null ? String(o.companyId) : null,
-    updatedAt: o.updatedAt,
+    workStartTime: o.workStartTime || '08:00',
+    workEndTime: o.workEndTime || '17:00',
+    lateDeadline: o.lateDeadline || '10:00',
+    address: o.address || undefined,
+    updatedAt: o.updatedAt || new Date().toISOString(),
   };
 }
 
@@ -227,13 +232,18 @@ export class AttendanceService {
     id: string;
     fullName: string;
     department?: string;
+    password?: string;
   }): Promise<{ success: boolean; message: string }> {
     const cleanName = params.fullName.trim();
     if (!cleanName) return { success: false, message: 'Nama tidak boleh kosong.' };
     try {
+      const body: any = { fullName: cleanName, department: params.department?.trim() || 'General' };
+      if (params.password && params.password.length >= 6) {
+        body.password = params.password;
+      }
       await apiFetch(`/users/${params.id}`, {
         method: 'PATCH',
-        body: { fullName: cleanName, department: params.department?.trim() || 'General' },
+        body,
       });
       return { success: true, message: `Data ${cleanName} berhasil diperbarui.` };
     } catch (e: any) {
@@ -302,10 +312,13 @@ export class AttendanceService {
     return { success: false, message: login.error || 'Gagal bootstrap admin.' };
   }
 
-  static async getOfficeSettings(): Promise<OfficeSettings> {
+  static async getOfficeSettings(): Promise<OfficeSettings | null> {
     const offices = await this.getOfficeList();
-    if (offices.length > 0) currentOfficeSettings = offices[0];
-    return currentOfficeSettings;
+    if (offices.length > 0) {
+      currentOfficeSettings = offices[0];
+      return currentOfficeSettings;
+    }
+    return null;
   }
 
   /** Semua titik kantor, urut dari yang paling baru. */
@@ -321,13 +334,17 @@ export class AttendanceService {
     }
   }
 
-  /** Tambah titik kantor baru (nama + koordinat + radius + warna custom). */
+  /** Tambah titik kantor baru (nama + koordinat + radius + warna custom + jam kerja + alamat). */
   static async addOffice(params: {
     officeName: string;
     latitude: number;
     longitude: number;
     radiusMeters: number;
     color?: string;
+    workStartTime?: string;
+    workEndTime?: string;
+    lateDeadline?: string;
+    address?: string;
   }): Promise<{ success: boolean; message: string; office?: OfficeSettings }> {
     const name = params.officeName.trim();
     if (!name) return { success: false, message: 'Nama kantor tidak boleh kosong.' };
@@ -347,6 +364,10 @@ export class AttendanceService {
           longitude: params.longitude,
           radiusMeters: params.radiusMeters,
           color: officeColor,
+          workStartTime: params.workStartTime || '08:00',
+          workEndTime: params.workEndTime || '17:00',
+          lateDeadline: params.lateDeadline || '10:00',
+          address: params.address?.trim() || undefined,
         },
       });
       const office = mapOffice(data.office);
@@ -357,10 +378,20 @@ export class AttendanceService {
     }
   }
 
-  /** Ubah nama / titik / radius / warna kantor tertentu. */
+  /** Ubah nama / titik / radius / warna / jam kerja / alamat kantor tertentu. */
   static async updateOffice(
     id: string,
-    params: { officeName: string; latitude: number; longitude: number; radiusMeters: number; color?: string }
+    params: {
+      officeName: string;
+      latitude: number;
+      longitude: number;
+      radiusMeters: number;
+      color?: string;
+      workStartTime?: string;
+      workEndTime?: string;
+      lateDeadline?: string;
+      address?: string;
+    }
   ): Promise<{ success: boolean; message: string }> {
     const name = params.officeName.trim();
     if (!name) return { success: false, message: 'Nama kantor tidak boleh kosong.' };
@@ -380,6 +411,10 @@ export class AttendanceService {
           longitude: params.longitude,
           radiusMeters: params.radiusMeters,
           color: officeColor,
+          workStartTime: params.workStartTime || '08:00',
+          workEndTime: params.workEndTime || '17:00',
+          lateDeadline: params.lateDeadline || '10:00',
+          address: params.address?.trim() || undefined,
         },
       });
       await this.getOfficeList();

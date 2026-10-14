@@ -129,14 +129,18 @@ export const AttendanceHub: React.FC<AttendanceHubProps> = ({
   onLogout,
   onUpdateUser,
 }) => {
-  const offices = officeList.length > 0 ? officeList : [officeSettings];
+  const offices = officeList;
+  const hasNoOffice = offices.length === 0;
   const [activeTab, setActiveTab] = useState<UserTabKey | 'izin'>('presensi');
   const [leaveViewMode, setLeaveViewMode] = useState<'list' | 'create'>('list');
   const [mode, setMode] = useState<'masuk' | 'pulang'>('masuk');
   const [place, setPlace] = useState<'kantor' | 'rumah'>('kantor');
   const [currentDistance, setCurrentDistance] = useState<number | null>(null);
-  const [nearestOffice, setNearestOffice] = useState<OfficeSettings>(offices[0]);
-  const [currentCoords, setCurrentCoords] = useState({ latitude: offices[0].latitude, longitude: offices[0].longitude });
+  const [nearestOffice, setNearestOffice] = useState<OfficeSettings | null>(offices[0] || null);
+  const [currentCoords, setCurrentCoords] = useState({
+    latitude: offices[0]?.latitude ?? -6.2088,
+    longitude: offices[0]?.longitude ?? 106.8456,
+  });
   const [locLoading, setLocLoading] = useState(false);
   const [reason, setReason] = useState('');
   const [reasonTouched, setReasonTouched] = useState(false);
@@ -174,10 +178,14 @@ export const AttendanceHub: React.FC<AttendanceHubProps> = ({
   const toastSlide = useRef(new Animated.Value(-80)).current;
 
   useEffect(() => {
-    setNearestOffice(offices[0]);
+    if (offices.length > 0) {
+      setNearestOffice(offices[0]);
+    } else {
+      setNearestOffice(null);
+    }
     fetchLocation();
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [officeSettings.id, offices.length]);
+  }, [officeSettings?.id, offices.length]);
 
   // Tampilkan toast tiap user belum absen hari ini (tutup otomatis / silang).
   useEffect(() => {
@@ -211,6 +219,14 @@ export const AttendanceHub: React.FC<AttendanceHubProps> = ({
     setGpsStale(false);
     const { coords, errorMsg } = await getCurrentLocation();
     setCurrentCoords(coords);
+
+    if (offices.length === 0) {
+      setNearestOffice(null);
+      setCurrentDistance(null);
+      setLocLoading(false);
+      return;
+    }
+
     // Cari titik kantor terdekat dari posisi user
     let best = offices[0];
     let bestDist = calculateDistanceMeters(coords.latitude, coords.longitude, best.latitude, best.longitude);
@@ -230,11 +246,16 @@ export const AttendanceHub: React.FC<AttendanceHubProps> = ({
     setLocLoading(false);
   };
 
-  const isWithinRadius = !gpsStale && currentDistance !== null && currentDistance <= nearestOffice.radiusMeters;
+  const isWithinRadius =
+    !gpsStale && currentDistance !== null && nearestOffice
+      ? currentDistance <= nearestOffice.radiusMeters
+      : false;
   const blockReason =
-    gpsStale || locError
+    hasNoOffice
+      ? 'Titik kantor cabang belum dikonfigurasi oleh admin cabang.'
+      : gpsStale || locError
       ? 'Lokasi belum valid. Nyalakan GPS dan tekan Cek ulang sampai jarak tampil.'
-      : place === 'kantor' && currentDistance !== null && !isWithinRadius
+      : place === 'kantor' && currentDistance !== null && nearestOffice && !isWithinRadius
         ? `Anda ${formatDistance(currentDistance)} dari ${nearestOffice.officeName}, batas ${nearestOffice.radiusMeters} m. Pilih Dari rumah atau mendekat dulu.`
         : null;
   const firstName = user.fullName.split(' ')[0];
@@ -259,18 +280,36 @@ export const AttendanceHub: React.FC<AttendanceHubProps> = ({
   };
   const greeting = getGreeting(curHour);
 
-  // Aturan jam datang: 08:00 - 10:00 (sebelum 08:00 tetap sah tepat waktu).
-    // Lewat pukul 10:00 dikategorikan Terlambat (presisi sekond: 10:00:01 sudah terlambat).
-    const isLateCheckIn = isAfterTimeOfDay(currentTime, 10, 0);
+  const parseHourMinute = (timeStr?: string, defH = 8, defM = 0) => {
+    if (!timeStr) return { h: defH, m: defM };
+    const parts = timeStr.split(':').map((p) => parseInt(p, 10));
+    return {
+      h: !isNaN(parts[0]) ? parts[0] : defH,
+      m: !isNaN(parts[1]) ? parts[1] : defM,
+    };
+  };
 
-  // Aturan jam pulang: terkunci sebelum pukul 17:00 WIB hingga batas 00:00 (23:59:59).
-  const isClockOutUnlocked = curHour >= 17;
+  const workStartStr = nearestOffice?.workStartTime || '08:00';
+  const workEndStr = nearestOffice?.workEndTime || '17:00';
+  const lateDeadStr = nearestOffice?.lateDeadline || '10:00';
 
-  // Countdown jam pulang menuju pukul 17:00 WIB
+  const { h: lateH, m: lateM } = parseHourMinute(lateDeadStr, 10, 0);
+  const { h: endH, m: endM } = parseHourMinute(workEndStr, 17, 0);
+
+  // Aturan jam datang: dinamis mengikuti batas terlambat kantor
+  const isLateCheckIn = isAfterTimeOfDay(currentTime, lateH, lateM);
+
+  // Aturan jam pulang: dinamis mengikuti jam pulang kantor
+  const isClockOutUnlocked =
+    isAfterTimeOfDay(currentTime, endH, endM) ||
+    (currentTime.getHours() === endH && currentTime.getMinutes() >= endM) ||
+    currentTime.getHours() > endH;
+
+  // Countdown jam pulang menuju jam pulang kantor
   const getClockOutCountdown = () => {
-    if (curHour >= 17) return '';
+    if (isClockOutUnlocked) return '';
     const target = new Date(currentTime);
-    target.setHours(17, 0, 0, 0);
+    target.setHours(endH, endM, 0, 0);
     const diffMs = Math.max(0, target.getTime() - currentTime.getTime());
     const h = Math.floor(diffMs / (1000 * 60 * 60));
     const m = Math.floor((diffMs % (1000 * 60 * 60)) / (1000 * 60));
@@ -298,13 +337,13 @@ export const AttendanceHub: React.FC<AttendanceHubProps> = ({
   const onTimeCount = monthAllRecords.filter((r) => {
     if (r.sessionType !== 'masuk') return false;
     const d = safeParseDate(r.clockInTime);
-    return d ? !isAfterTimeOfDay(d, 10, 0) : false;
+    return d ? !isAfterTimeOfDay(d, lateH, lateM) : false;
   }).length;
 
   const lateCount = monthAllRecords.filter((r) => {
     if (r.sessionType !== 'masuk') return false;
     const d = safeParseDate(r.clockInTime);
-    return d ? isAfterTimeOfDay(d, 10, 0) : false;
+    return d ? isAfterTimeOfDay(d, lateH, lateM) : false;
   }).length;
 
   const leaveCount = monthAllRecords.filter(
@@ -375,10 +414,10 @@ export const AttendanceHub: React.FC<AttendanceHubProps> = ({
       return;
     }
 
-    // 3. Jika memilih mode pulang dan belum jam 17:00 WIB
+    // 3. Jika memilih mode pulang dan belum jam pulang
     if (mode === 'pulang' && !isClockOutUnlocked) {
       setBlockedMessage(
-        `Presensi pulang saat ini terkunci. Sesuai jam operasional, presensi pulang dibuka dalam ${clockOutCountdownText || 'pukul 17:00 WIB'}.`
+        `Presensi pulang saat ini terkunci. Sesuai jam operasional kantor, presensi pulang dibuka dalam ${clockOutCountdownText || `pukul ${workEndStr} WIB`}.`
       );
       setShowBlockedDialog(true);
       return;
@@ -476,10 +515,10 @@ export const AttendanceHub: React.FC<AttendanceHubProps> = ({
         setPendingLeaveData(null);
       } else {
         const now = new Date();
-                const isLate = mode === 'masuk' && isAfterTimeOfDay(now, 10, 0);
+        const isLate = mode === 'masuk' && isAfterTimeOfDay(now, lateH, lateM);
         let finalReason = place === 'rumah' ? reason.trim() : undefined;
         if (isLate) {
-          finalReason = finalReason ? `${finalReason} (Terlambat: Masuk > 10:00)` : 'Terlambat (> 10:00 WIB)';
+          finalReason = finalReason ? `${finalReason} (Terlambat: Masuk > ${lateDeadStr})` : `Terlambat (> ${lateDeadStr} WIB)`;
         }
 
         await onClockIn({
@@ -488,8 +527,8 @@ export const AttendanceHub: React.FC<AttendanceHubProps> = ({
           latitude: currentCoords.latitude,
           longitude: currentCoords.longitude,
           distanceMeters: currentDistance || 0,
-          officeName: place === 'kantor' ? nearestOffice.officeName : undefined,
-          officeColor: place === 'kantor' ? nearestOffice.color : undefined,
+          officeName: place === 'kantor' ? nearestOffice?.officeName : undefined,
+          officeColor: place === 'kantor' ? nearestOffice?.color : undefined,
           reason: finalReason,
           photoUrl: publicPhotoUrl,
         });
@@ -652,9 +691,9 @@ export const AttendanceHub: React.FC<AttendanceHubProps> = ({
             <View style={styles.shiftCol}>
               <Text style={styles.bottomRowLabel}>Jadwal Kerja</Text>
               <View style={styles.shiftValueRow}>
-                <Text style={styles.shiftTimeText}>08:00 - 17:00 WIB</Text>
+                <Text style={styles.shiftTimeText}>{workStartStr} - {workEndStr} WIB</Text>
                 <Text style={isLateCheckIn ? styles.lateStatusText : styles.onTimeStatusText}>
-                  {isLateCheckIn ? '• Terlambat (> 10:00)' : '• Tepat Waktu'}
+                  {isLateCheckIn ? `• Terlambat (> ${lateDeadStr})` : '• Tepat Waktu'}
                 </Text>
               </View>
             </View>
@@ -813,7 +852,7 @@ export const AttendanceHub: React.FC<AttendanceHubProps> = ({
                     ? 'Status Izin'
                     : todayMasuk
                     ? `Sudah jam ${formatLogTime(todayMasuk.clockInTime)}`
-                    : 'Batas 10:00 WIB'}
+                    : `Batas ${lateDeadStr} WIB`}
                 </Text>
               </TouchableOpacity>
 
@@ -823,7 +862,7 @@ export const AttendanceHub: React.FC<AttendanceHubProps> = ({
                   select();
                   if (!isClockOutUnlocked) {
                     setBlockedMessage(
-                      `Presensi pulang terkunci sebelum pukul 17:00 WIB. Dibuka dalam ${clockOutCountdownText || 'pukul 17:00 WIB'}.`
+                      `Presensi pulang terkunci sebelum pukul ${workEndStr} WIB. Dibuka dalam ${clockOutCountdownText || `pukul ${workEndStr} WIB`}.`
                     );
                     setShowBlockedDialog(true);
                     return;
@@ -869,7 +908,7 @@ export const AttendanceHub: React.FC<AttendanceHubProps> = ({
                     ? `Sudah jam ${formatLogTime(todayPulang.clockInTime)}`
                     : !isClockOutUnlocked
                       ? `Buka dalam ${clockOutCountdownText}`
-                      : '17:00 - 00:00 WIB'}
+                      : `${workEndStr} - 00:00 WIB`}
                 </Text>
               </TouchableOpacity>
             </View>
@@ -969,12 +1008,12 @@ export const AttendanceHub: React.FC<AttendanceHubProps> = ({
               <MapView
                 userLat={currentCoords.latitude}
                 userLng={currentCoords.longitude}
-                officeLat={nearestOffice.latitude}
-                officeLng={nearestOffice.longitude}
-                radiusMeters={nearestOffice.radiusMeters}
+                officeLat={nearestOffice?.latitude ?? -6.2088}
+                officeLng={nearestOffice?.longitude ?? 106.8456}
+                radiusMeters={nearestOffice?.radiusMeters ?? 150}
                 offices={offices}
-                activeOfficeId={nearestOffice.id}
-                mainColor={nearestOffice.color}
+                activeOfficeId={nearestOffice?.id}
+                mainColor={nearestOffice?.color ?? colors.primary}
                 height={180}
               />
             </View>
@@ -997,13 +1036,13 @@ export const AttendanceHub: React.FC<AttendanceHubProps> = ({
                 />
                 <View style={{ flex: 1 }}>
                   <Text style={styles.locationStatusTitle} numberOfLines={1}>
-                    {place === 'kantor' ? nearestOffice.officeName : 'Presensi Dari Rumah (WFH)'}
+                    {place === 'kantor' ? (nearestOffice?.officeName || 'Kantor Cabang Belum Diatur') : 'Presensi Dari Rumah (WFH)'}
                   </Text>
                   <Text style={styles.locationStatusSub} numberOfLines={1}>
                     {place === 'kantor'
                       ? locLoading
                         ? 'Sedang mencari koordinat GPS...'
-                        : currentDistance !== null
+                        : currentDistance !== null && nearestOffice
                           ? `${formatDistance(currentDistance)} • ${
                               isWithinRadius
                                 ? 'Dalam radius kantor'
@@ -1372,14 +1411,14 @@ export const AttendanceHub: React.FC<AttendanceHubProps> = ({
           setPendingLeaveData(null);
         }}
         onConfirmPhoto={handleConfirmPhotoSubmit}
-        attendanceTypeLabel={`${mode === 'masuk' ? 'Masuk' : 'Pulang'} (${place === 'kantor' ? nearestOffice.officeName : 'Rumah'})`}
+        attendanceTypeLabel={`${mode === 'masuk' ? 'Masuk' : 'Pulang'} (${place === 'kantor' ? (nearestOffice?.officeName || 'Kantor') : 'Rumah'})`}
         metadata={{
           userName: user.fullName,
           department: user.department || 'Operasional',
           companyName: 'E-Presensi SKMI',
           sessionLabel: mode === 'masuk' ? 'PRESENSI MASUK' : 'PRESENSI PULANG',
           statusLabel: mode === 'masuk' ? (isLateCheckIn ? 'Terlambat' : 'Tepat Waktu') : 'Selesai',
-          officeName: place === 'kantor' ? nearestOffice.officeName : 'Kerja Dari Rumah (WFH)',
+          officeName: place === 'kantor' ? (nearestOffice?.officeName || 'Kantor') : 'Kerja Dari Rumah (WFH)',
           distanceText:
             place === 'kantor'
               ? currentDistance !== null
@@ -1409,7 +1448,7 @@ export const AttendanceHub: React.FC<AttendanceHubProps> = ({
         onClose={() => setShowBlockedDialog(false)}
         onConfirm={() => setShowBlockedDialog(false)}
         title="Di Luar Area Kantor"
-        message={blockedMessage || `Anda berada di luar radius kantor (batas ${nearestOffice.radiusMeters} meter). Silakan mendekat ke area ${nearestOffice.officeName} untuk melakukan presensi.`}
+        message={blockedMessage || `Anda berada di luar radius kantor (batas ${nearestOffice?.radiusMeters ?? 150} meter). Silakan mendekat ke area ${nearestOffice?.officeName || 'kantor'} untuk melakukan presensi.`}
         confirmText="Kembali"
         icon="x"
         variant="danger"

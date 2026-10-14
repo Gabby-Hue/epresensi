@@ -150,7 +150,7 @@ function AppContent() {
   const handleUpdateOfficeSettings = async (newSettings: Partial<OfficeSettings>) => {
     await AttendanceService.updateOfficeSettings(newSettings);
     const fresh = await AttendanceService.getOfficeSettings();
-    setOfficeSettings({ ...fresh });
+    setOfficeSettings(fresh ? { ...fresh } : null);
   };
 
   const handleUserClockIn = async (data: {

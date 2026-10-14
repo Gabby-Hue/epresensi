@@ -1,8 +1,7 @@
 // Pengganti src/lib/supabase.ts — client HTTP ke backend Express.
 // Alur baru: Expo App -> apiFetch (file ini) -> Express :3001 -> MySQL Laragon.
-// Token JWT disimpan di memory + localStorage (web). Di HP native, token
-// hidup selama aplikasi jalan; untuk persist antar-restart pasang
-// @react-native-async-storage/async-storage lalu ganti webStore di bawah.
+// Token JWT disimpan di memory + cookie (web) + localStorage (web) + AsyncStorage (native).
+import AsyncStorage from '@react-native-async-storage/async-storage';
 
 export const apiBaseUrl = (
   process.env.EXPO_PUBLIC_API_URL || 'http://localhost:3001'
@@ -14,6 +13,30 @@ export const apiBaseUrl = (
 
 const TOKEN_KEY = 'epresensi_token';
 let memToken: string | null = null;
+
+function getCookie(name: string): string | null {
+  try {
+    if (typeof document === 'undefined' || !document.cookie) return null;
+    const match = document.cookie.match(new RegExp('(^|;\\s*)' + name + '=([^;]*)'));
+    return match ? decodeURIComponent(match[2]) : null;
+  } catch {
+    return null;
+  }
+}
+
+function setCookie(name: string, value: string | null, days = 365) {
+  try {
+    if (typeof document === 'undefined') return;
+    if (value) {
+      const maxAge = days * 24 * 60 * 60;
+      document.cookie = `${name}=${encodeURIComponent(value)}; path=/; max-age=${maxAge}; SameSite=Lax`;
+    } else {
+      document.cookie = `${name}=; path=/; max-age=0; SameSite=Lax`;
+    }
+  } catch {
+    // abaikan
+  }
+}
 
 function webStore(): {
   get: (k: string) => string | null;
@@ -38,24 +61,65 @@ function webStore(): {
 
 export async function getToken(): Promise<string | null> {
   if (memToken) return memToken;
+
+  // 1. Cek dari Cookie (Web - bertahan saat close tab / reload)
+  const cookieVal = getCookie(TOKEN_KEY);
+  if (cookieVal) {
+    memToken = cookieVal;
+    return memToken;
+  }
+
+  // 2. Cek dari LocalStorage (Web)
   const ws = webStore();
   if (ws) {
     try {
-      memToken = ws.get(TOKEN_KEY);
+      const lsVal = ws.get(TOKEN_KEY);
+      if (lsVal) {
+        memToken = lsVal;
+        setCookie(TOKEN_KEY, lsVal);
+        return memToken;
+      }
     } catch {
-      memToken = null;
+      // abaikan
     }
   }
-  return memToken;
+
+  // 3. Cek dari AsyncStorage (Mobile APK - bertahan saat close aplikasi)
+  try {
+    const asVal = await AsyncStorage.getItem(TOKEN_KEY);
+    if (asVal) {
+      memToken = asVal;
+      setCookie(TOKEN_KEY, asVal);
+      return memToken;
+    }
+  } catch {
+    // abaikan
+  }
+
+  return null;
 }
 
 export async function setToken(t: string | null): Promise<void> {
   memToken = t;
+
+  // 1. Simpan ke Cookie (Web)
+  setCookie(TOKEN_KEY, t);
+
+  // 2. Simpan ke LocalStorage (Web)
   const ws = webStore();
-  if (!ws) return;
+  if (ws) {
+    try {
+      if (t) ws.set(TOKEN_KEY, t);
+      else ws.del(TOKEN_KEY);
+    } catch {
+      // abaikan
+    }
+  }
+
+  // 3. Simpan ke AsyncStorage (Mobile APK)
   try {
-    if (t) ws.set(TOKEN_KEY, t);
-    else ws.del(TOKEN_KEY);
+    if (t) await AsyncStorage.setItem(TOKEN_KEY, t);
+    else await AsyncStorage.removeItem(TOKEN_KEY);
   } catch {
     // abaikan
   }

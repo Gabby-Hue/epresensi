@@ -72,7 +72,10 @@ export const AdminDashboard: React.FC<AdminDashboardProps> = ({
   onPressProfile,
 }) => {
   const isSuper = currentAdmin.role === 'superadmin';
-  const [activeTab, setActiveTab] = useState<TabKey>(isSuper ? 'companies' : 'monitoring');
+  const hasNoOffices = !isSuper && officeList.length === 0;
+  const [activeTab, setActiveTab] = useState<TabKey>(
+    isSuper ? 'companies' : (officeList.length === 0 ? 'geofence' : 'monitoring')
+  );
   const [companiesList, setCompaniesList] = useState<{ id: string; name: string }[]>([]);
   const [auditLogs, setAuditLogs] = useState<AuditLog[]>([]);
   const [selectedRecord, setSelectedRecord] = useState<AttendanceRecord | null>(null);
@@ -164,6 +167,18 @@ export const AdminDashboard: React.FC<AdminDashboardProps> = ({
 
   const tabContent = (
     <>
+      {hasNoOffices && (
+        <View style={styles.noOfficeWarningBanner}>
+          <Feather name="alert-triangle" size={20} color="#B45309" style={{ marginRight: 10 }} />
+          <View style={{ flex: 1 }}>
+            <Text style={styles.noOfficeWarningTitle}>Titik Kantor Cabang Belum Dikonfigurasi</Text>
+            <Text style={styles.noOfficeWarningSub}>
+              Sebagai admin cabang pertama, Anda harus menginput titik lokasi kantor cabang dan jam kerja terlebih dahulu di tab Titik & Radius agar presensi karyawan dapat mulai digunakan.
+            </Text>
+          </View>
+        </View>
+      )}
+
       {/* 1. KONTEN TAB MONITORING */}
       {activeTab === 'monitoring' && isSuper && (
         <>
@@ -554,7 +569,7 @@ export const AdminDashboard: React.FC<AdminDashboardProps> = ({
       {/* 3. TAB TITIK & RADIUS GEOFENCE (HANYA ADMIN CABANG) */}
       {activeTab === 'geofence' && !isSuper && (
         <GeofenceSettings
-          offices={officeList.length > 0 ? officeList : [officeSettings]}
+          offices={officeList}
           onAdd={async (params) => {
             const res = await AttendanceService.addOffice(params);
             if (res.success) onRefreshOffices();
@@ -698,33 +713,46 @@ export const AdminDashboard: React.FC<AdminDashboardProps> = ({
           </View>
         </View>
       ) : (
-        /* Layout HP: tab atas + konten */
+        /* Layout HP: tab atas horizontal scroll proporsional + konten */
         <>
-          <View style={styles.tabHeader}>
-            {visibleTabs.map((tab) => {
-              const active = activeTab === tab.key;
-              const count = tab.key === 'approval' ? pendingApprovals.length : 0;
-              return (
-                <TouchableOpacity
-                  key={tab.key}
-                  onPress={() => {
-                    select();
-                    setActiveTab(tab.key);
-                  }}
-                  style={[styles.navTab, active && styles.activeNavTab]}
-                >
-                  <Feather
-                    name={tab.icon}
-                    size={16}
-                    color={active ? '#FFFFFF' : colors.muted}
-                    style={{ marginRight: 4 }}
-                  />
-                  <Text style={[styles.navTabText, active && styles.activeNavText]}>
-                    {tab.label}{count > 0 ? ` (${count})` : ''}
-                  </Text>
-                </TouchableOpacity>
-              );
-            })}
+          <View style={styles.tabHeaderWrapper}>
+            <ScrollView
+              horizontal
+              showsHorizontalScrollIndicator={false}
+              contentContainerStyle={styles.tabHeaderContent}
+            >
+              {visibleTabs.map((tab) => {
+                const active = activeTab === tab.key;
+                const count = tab.key === 'approval' ? pendingApprovals.length : 0;
+                return (
+                  <TouchableOpacity
+                    key={tab.key}
+                    onPress={() => {
+                      select();
+                      setActiveTab(tab.key);
+                    }}
+                    style={[styles.navTab, active && styles.activeNavTab]}
+                  >
+                    <Feather
+                      name={tab.icon}
+                      size={15}
+                      color={active ? colors.primaryDark : colors.muted}
+                      style={{ marginRight: 6 }}
+                    />
+                    <Text style={[styles.navTabText, active && styles.activeNavText]}>
+                      {tab.label}
+                    </Text>
+                    {count > 0 && (
+                      <View style={[styles.tabBadge, active && styles.tabBadgeActive]}>
+                        <Text style={[styles.tabBadgeText, active && styles.tabBadgeTextActive]}>
+                          {count}
+                        </Text>
+                      </View>
+                    )}
+                  </TouchableOpacity>
+                );
+              })}
+            </ScrollView>
           </View>
 
           <ScrollView
@@ -779,41 +807,81 @@ const styles = StyleSheet.create({
     flex: 1,
     backgroundColor: colors.background,
   },
-  /* Tab HP: grid 2x2 */
-  tabHeader: {
-    flexDirection: 'row',
-    flexWrap: 'wrap',
-    gap: 6,
+  /* Tab HP: horizontal pill bar proporsional */
+  tabHeaderWrapper: {
     backgroundColor: colors.surface,
-    paddingHorizontal: 12,
-    paddingVertical: 8,
     borderBottomWidth: 1,
     borderBottomColor: colors.border,
+  },
+  tabHeaderContent: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    paddingHorizontal: 12,
+    paddingVertical: 10,
+    gap: 8,
   },
   navTab: {
     flexDirection: 'row',
     alignItems: 'center',
     justifyContent: 'center',
-    flexGrow: 1,
-    flexBasis: '45%',
-    paddingVertical: 10,
-    paddingHorizontal: 12,
-    borderRadius: radius.sm,
+    paddingVertical: 8,
+    paddingHorizontal: 14,
+    borderRadius: radius.md,
     backgroundColor: colors.background,
     borderWidth: 1,
     borderColor: colors.border,
   },
   activeNavTab: {
-    backgroundColor: colors.primary,
-    borderColor: colors.primaryDark,
+    backgroundColor: colors.primarySoft,
+    borderColor: colors.primary,
   },
   navTabText: {
     fontSize: fontSize.xs,
-    fontWeight: '700',
+    fontWeight: '600',
     color: colors.muted,
   },
   activeNavText: {
+    color: colors.primaryDark,
+    fontWeight: '700',
+  },
+  tabBadge: {
+    marginLeft: 6,
+    paddingHorizontal: 6,
+    paddingVertical: 1,
+    borderRadius: 10,
+    backgroundColor: colors.danger,
+  },
+  tabBadgeActive: {
+    backgroundColor: colors.danger,
+  },
+  tabBadgeText: {
+    fontSize: 10,
+    fontWeight: '700',
     color: '#FFFFFF',
+  },
+  tabBadgeTextActive: {
+    color: '#FFFFFF',
+  },
+  noOfficeWarningBanner: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    padding: 14,
+    backgroundColor: '#FFFBEB',
+    borderRadius: radius.md,
+    borderWidth: 1,
+    borderColor: '#FDE68A',
+    marginBottom: 16,
+  },
+  noOfficeWarningTitle: {
+    fontSize: fontSize.sm,
+    fontWeight: '700',
+    color: '#92400E',
+    marginBottom: 2,
+  },
+  noOfficeWarningSub: {
+    fontSize: fontSize.xs,
+    color: '#B45309',
+    lineHeight: 16,
   },
   scroll: {
     padding: 16,

@@ -27,6 +27,7 @@ export interface UserProfile {
   phoneNumber?: string;
   deviceModel?: string;
   deviceId?: string;
+  plainPassword?: string;
 }
 
 export interface OfficeSettings {
@@ -37,6 +38,10 @@ export interface OfficeSettings {
   radiusMeters: number;
   color: string;
   companyId?: string | null;
+  workStartTime?: string;
+  workEndTime?: string;
+  lateDeadline?: string;
+  address?: string;
   updatedAt: string;
 }
 
